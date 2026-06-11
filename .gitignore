@@ -12,6 +12,10 @@ dist
 dist-ssr
 *.local
 .netlify
+presentation-video/frames/
+presentation-video/node_modules/
+presentation-video/narration.wav
+presentation-video/amber-oak-cafe-client-presentation.mp4
 
 # Editor directories and files
 .vscode/*

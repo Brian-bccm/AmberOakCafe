@@ -1,0 +1,17 @@
+file 'C:/Users/Admin/CodexProject/restaurant-website/presentation-video/frames/slide-01-intro.png'
+duration 38
+file 'C:/Users/Admin/CodexProject/restaurant-website/presentation-video/frames/slide-02-homepage.png'
+duration 48
+file 'C:/Users/Admin/CodexProject/restaurant-website/presentation-video/frames/slide-03-navigation.png'
+duration 40
+file 'C:/Users/Admin/CodexProject/restaurant-website/presentation-video/frames/slide-04-business-sections.png'
+duration 54
+file 'C:/Users/Admin/CodexProject/restaurant-website/presentation-video/frames/slide-05-contact-actions.png'
+duration 46
+file 'C:/Users/Admin/CodexProject/restaurant-website/presentation-video/frames/slide-06-mobile.png'
+duration 44
+file 'C:/Users/Admin/CodexProject/restaurant-website/presentation-video/frames/slide-07-proof.png'
+duration 52
+file 'C:/Users/Admin/CodexProject/restaurant-website/presentation-video/frames/slide-08-handoff.png'
+duration 48
+file 'C:/Users/Admin/CodexProject/restaurant-website/presentation-video/frames/slide-08-handoff.png'

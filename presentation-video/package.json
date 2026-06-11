@@ -1,0 +1,9 @@
+{
+  "name": "amber-oak-cafe-presentation-video",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "dependencies": {
+    "ffmpeg-static": "^5.2.0"
+  }
+}
