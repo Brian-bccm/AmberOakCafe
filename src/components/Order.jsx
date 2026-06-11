@@ -7,7 +7,7 @@ import { formatCurrency, normalizePrice } from '../utils/formatters.js'
 const initialCustomer = { name: '', phone: '', email: '', order_type: 'pickup' }
 
 function Order() {
-  const [items, setItems] = useState(fallbackMenu().slice(0, 4).map((item) => ({ ...item, quantity: 0 })))
+  const [items, setItems] = useState(fallbackMenu().slice(0, 4).map((item) => ({ ...item, quantity: 0, notes: '', customizations: {} })))
   const [customer, setCustomer] = useState(initialCustomer)
   const [notes, setNotes] = useState('')
   const [status, setStatus] = useState({ type: 'idle', message: '' })
@@ -16,7 +16,7 @@ function Order() {
   useEffect(() => {
     let ignore = false
     fetchPublicMenuItems().then((result) => {
-      if (!ignore) setItems(result.data.slice(0, 6).map((item) => ({ ...item, quantity: 0 })))
+      if (!ignore) setItems(result.data.slice(0, 6).map((item) => ({ ...item, quantity: 0, notes: '', customizations: {} })))
     })
     return () => {
       ignore = true
@@ -30,6 +30,26 @@ function Order() {
 
   const updateQuantity = (id, quantity) => {
     setItems((current) => current.map((item) => (item.id === id ? { ...item, quantity } : item)))
+  }
+
+  const updateItemNotes = (id, itemNotes) => {
+    setItems((current) => current.map((item) => (item.id === id ? { ...item, notes: itemNotes } : item)))
+  }
+
+  const updateCustomization = (id, optionName, value) => {
+    setItems((current) =>
+      current.map((item) =>
+        item.id === id
+          ? {
+              ...item,
+              customizations: {
+                ...(item.customizations || {}),
+                [optionName]: value,
+              },
+            }
+          : item,
+      ),
+    )
   }
 
   const handleCustomerChange = (event) => {
@@ -58,7 +78,7 @@ function Order() {
       })
       setCustomer(initialCustomer)
       setNotes('')
-      setItems((current) => current.map((item) => ({ ...item, quantity: 0 })))
+      setItems((current) => current.map((item) => ({ ...item, quantity: 0, notes: '', customizations: {} })))
     } catch (error) {
       setStatus({ type: 'error', message: error.message || 'Order could not be saved.' })
     } finally {
@@ -93,6 +113,22 @@ function Order() {
                 <label className="mt-4 grid gap-2 text-sm font-bold">
                   Quantity
                   <input type="number" min="0" max="20" value={item.quantity} onChange={(event) => updateQuantity(item.id, Number(event.target.value))} className="focus-ring rounded-lg border border-stone-300 bg-white px-4 py-2 font-normal" />
+                </label>
+                {(item.customization_options || []).map((option) => (
+                  <label key={`${item.id}-${option.name}`} className="mt-4 grid gap-2 text-sm font-bold">
+                    {option.name}
+                    <select value={item.customizations?.[option.name] || option.choices?.[0] || ''} onChange={(event) => updateCustomization(item.id, option.name, event.target.value)} className="focus-ring rounded-lg border border-stone-300 bg-white px-4 py-2 font-normal">
+                      {(option.choices || []).map((choice) => (
+                        <option key={choice} value={choice}>
+                          {choice}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                ))}
+                <label className="mt-4 grid gap-2 text-sm font-bold">
+                  Description / special request
+                  <textarea value={item.notes || ''} onChange={(event) => updateItemNotes(item.id, event.target.value)} className="focus-ring min-h-20 resize-y rounded-lg border border-stone-300 bg-white px-4 py-2 font-normal" placeholder="Example: less spicy, no onion, extra sauce" />
                 </label>
               </article>
             ))}

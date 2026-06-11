@@ -70,6 +70,8 @@ export async function submitOrder({ customer, items, notes }) {
     item_name: item.name,
     unit_price: normalizePrice(item.price),
     quantity: Number(item.quantity),
+    customizations: item.customizations || {},
+    notes: item.notes?.trim() || null,
   }))
 
   const { error: itemError } = await supabase.from('order_items').insert(payload)

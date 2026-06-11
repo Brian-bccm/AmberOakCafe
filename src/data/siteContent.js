@@ -37,6 +37,7 @@ export const menuItems = [
     price: 'RM 28',
     description: 'Sourdough, whipped ricotta, sauteed mushrooms, truffle oil, herbs.',
     tag: 'Signature',
+    customization_options: [{ name: 'Add peanut', choices: ['No', 'Yes'] }],
   },
   {
     name: 'Smoked Duck Benedict',
@@ -49,6 +50,7 @@ export const menuItems = [
     price: 'RM 26',
     description: 'Buttery croffle, sambal, fried chicken bites, ikan bilis, cucumber.',
     tag: 'Local Twist',
+    customization_options: [{ name: 'Spicy level', choices: ['Normal', 'Less spicy', 'Extra spicy'] }],
   },
   {
     name: 'Sea Salt Gula Melaka Latte',

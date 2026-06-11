@@ -11,6 +11,7 @@ create table if not exists public.menu_items (
   category text not null default 'Brunch',
   tag text not null default 'Signature',
   image_url text,
+  customization_options jsonb not null default '[]'::jsonb,
   is_available boolean not null default true,
   display_order integer not null default 0,
   created_at timestamptz not null default now(),
@@ -62,6 +63,8 @@ create table if not exists public.order_items (
   item_name text not null,
   unit_price numeric(10,2) not null check (unit_price >= 0),
   quantity integer not null check (quantity > 0),
+  customizations jsonb not null default '{}'::jsonb,
+  notes text,
   line_total numeric(10,2) generated always as (unit_price * quantity) stored,
   created_at timestamptz not null default now()
 );

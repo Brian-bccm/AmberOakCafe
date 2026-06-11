@@ -10,9 +10,36 @@ function toDbMenuItem(item) {
     category: item.category?.trim() || 'Brunch',
     tag: item.tag?.trim() || 'Signature',
     image_url: item.image_url?.trim() || null,
+    customization_options: parseCustomizationOptions(item.customization_options),
     is_available: Boolean(item.is_available),
     display_order: Number(item.display_order || 0),
   }
+}
+
+export function parseCustomizationOptions(value) {
+  if (Array.isArray(value)) return value.filter((option) => option?.name)
+  if (!value?.trim?.()) return []
+
+  return value
+    .split('\n')
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .map((line) => {
+      const [name, rawChoices] = line.split(':')
+      return {
+        name: name.trim(),
+        choices: (rawChoices || 'No,Yes')
+          .split(',')
+          .map((choice) => choice.trim())
+          .filter(Boolean),
+      }
+    })
+    .filter((option) => option.name && option.choices.length)
+}
+
+export function stringifyCustomizationOptions(value) {
+  if (!Array.isArray(value) || !value.length) return ''
+  return value.map((option) => `${option.name}: ${(option.choices || []).join(', ')}`).join('\n')
 }
 
 export function fallbackMenu() {
@@ -24,6 +51,7 @@ export function fallbackMenu() {
     category: item.category || item.tag || 'Menu',
     tag: item.tag,
     image_url: item.image_url || null,
+    customization_options: item.customization_options || [],
     is_available: true,
     display_order: index + 1,
   }))

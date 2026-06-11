@@ -4,7 +4,7 @@ import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxi
 import { isSupabaseConfigured } from '../../lib/supabaseClient.js'
 import { fetchContactMessages, fetchOrders, fetchReservations, updateMessageStatus, updateOrderStatus, updateReservationStatus } from '../../services/adminService.js'
 import { getSessionUser, isAdminUser, signInAdmin, signOutAdmin } from '../../services/authService.js'
-import { createMenuItem, deleteMenuItem, fetchAdminMenuItems, updateMenuItem } from '../../services/menuService.js'
+import { createMenuItem, deleteMenuItem, fetchAdminMenuItems, stringifyCustomizationOptions, updateMenuItem } from '../../services/menuService.js'
 import { buildReport, calculateAnalytics } from '../../services/reportService.js'
 import { exportReportToExcel, exportReportToPdf } from '../../utils/exportReports.js'
 import { formatCurrency, formatDate, formatDateTime } from '../../utils/formatters.js'
@@ -25,6 +25,7 @@ const emptyMenuForm = {
   category: 'Brunch',
   tag: 'Signature',
   image_url: '',
+  customization_options: '',
   is_available: true,
   display_order: 0,
 }
@@ -188,11 +189,25 @@ function OrdersPanel({ rows, refresh }) {
     <DataTable
       title="Orders management"
       rows={rows}
-      headers={['Date', 'Customer', 'Items', 'Revenue', 'Status', 'Action']}
+      headers={['Date', 'Customer', 'Items', 'Order Notes', 'Revenue', 'Status', 'Action']}
       render={(row) => [
         formatDateTime(row.created_at),
         row.customer_name,
-        (row.order_items || []).map((item) => `${item.quantity}x ${item.item_name}`).join(', ') || '-',
+        <div key={`${row.id}-items`} className="grid gap-3">
+          {(row.order_items || []).map((item) => (
+            <div key={item.id} className="rounded-lg bg-cafe-cream px-3 py-2">
+              <p className="font-bold">{item.quantity}x {item.item_name}</p>
+              {item.customizations && Object.keys(item.customizations).length ? (
+                <p className="mt-1 text-xs text-stone-600">
+                  {Object.entries(item.customizations).map(([name, value]) => `${name}: ${value}`).join(', ')}
+                </p>
+              ) : null}
+              {item.notes ? <p className="mt-1 text-xs text-stone-600">Note: {item.notes}</p> : null}
+            </div>
+          ))}
+          {row.order_items?.length ? null : '-'}
+        </div>,
+        row.notes || '-',
         formatCurrency(row.subtotal),
         row.status,
         <StatusSelect key={row.id} value={row.status} options={['pending', 'confirmed', 'preparing', 'ready', 'completed', 'cancelled']} onChange={(value) => update(row.id, value)} />,
@@ -287,7 +302,7 @@ function MenuCrudPanel() {
 
   const edit = (item) => {
     setEditingId(item.id)
-    setForm({ ...emptyMenuForm, ...item, price: item.price ?? '' })
+    setForm({ ...emptyMenuForm, ...item, price: item.price ?? '', customization_options: stringifyCustomizationOptions(item.customization_options) })
   }
 
   const remove = async (id) => {
@@ -300,9 +315,18 @@ function MenuCrudPanel() {
       <form onSubmit={submit} className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
         <h2 className="font-display text-2xl">{editingId ? 'Edit menu item' : 'Add menu item'}</h2>
         <div className="mt-5 grid gap-4">
-          {['name', 'description', 'price', 'category', 'tag', 'image_url', 'display_order'].map((field) => (
-            <input key={field} name={field} value={form[field] ?? ''} onChange={change} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3" placeholder={field.replace('_', ' ')} />
-          ))}
+          <input name="name" value={form.name} onChange={change} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3" placeholder="Product name" />
+          <textarea name="description" value={form.description} onChange={change} className="focus-ring min-h-28 resize-y rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3" placeholder="Product description" />
+          <input name="price" value={form.price} onChange={change} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3" placeholder="Price, for example 28" />
+          <input name="category" value={form.category} onChange={change} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3" placeholder="Category, for example Brunch" />
+          <input name="tag" value={form.tag} onChange={change} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3" placeholder="Menu badge, for example Signature" />
+          <input name="image_url" value={form.image_url} onChange={change} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3" placeholder="Image URL optional" />
+          <input name="display_order" value={form.display_order} onChange={change} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3" placeholder="Display order" />
+          <label className="grid gap-2 text-sm font-bold">
+            Customization options
+            <textarea name="customization_options" value={form.customization_options} onChange={change} className="focus-ring min-h-28 resize-y rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3 font-normal" placeholder={'Add peanut: No, Yes\nSpicy level: Normal, Less spicy, Extra spicy'} />
+            <span className="text-xs font-normal leading-5 text-stone-500">One option per line. Use this format: Option name: Choice 1, Choice 2</span>
+          </label>
           <label className="inline-flex items-center gap-3 text-sm font-bold">
             <input type="checkbox" name="is_available" checked={form.is_available} onChange={change} />
             Available on public menu
@@ -316,11 +340,12 @@ function MenuCrudPanel() {
       <DataTable
         title="Menu items"
         rows={items}
-        headers={['Name', 'Category', 'Price', 'Available', 'Actions']}
+        headers={['Name', 'Category', 'Price', 'Options', 'Available', 'Actions']}
         render={(item) => [
           item.name,
           item.category,
           formatCurrency(item.price),
+          stringifyCustomizationOptions(item.customization_options) || '-',
           item.is_available ? 'Yes' : 'No',
           <span key={item.id} className="inline-flex gap-2">
             <button onClick={() => edit(item)} className="font-bold text-cafe-copper">Edit</button>
