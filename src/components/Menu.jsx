@@ -39,14 +39,16 @@ function Menu() {
           {menuItems.map((item) => (
             <article key={item.name} className="rounded-lg border border-stone-200 bg-cafe-cream p-6 shadow-sm">
               <div className="flex items-start justify-between gap-4">
-                <div>
+                <div className="min-w-0 flex-1">
                   <span className="inline-flex items-center gap-1 rounded-full bg-white px-3 py-1 text-xs font-bold uppercase tracking-[0.14em] text-cafe-sage">
                     <BadgeCheck size={14} aria-hidden="true" />
                     {item.tag}
                   </span>
                   <h3 className="mt-4 font-display text-2xl text-cafe-ink">{item.name}</h3>
                 </div>
-                <p className="rounded-full bg-cafe-ink px-4 py-2 text-sm font-bold text-white">{formatCurrency(item.price)}</p>
+                <p className="shrink-0 whitespace-nowrap rounded-full bg-cafe-ink px-4 py-2 text-sm font-bold leading-none text-white">
+                  {formatCurrency(item.price)}
+                </p>
               </div>
               <p className="mt-4 text-sm leading-7 text-stone-600">{item.description}</p>
             </article>
