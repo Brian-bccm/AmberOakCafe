@@ -2,9 +2,11 @@ import { createClient } from '@supabase/supabase-js'
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY
+const isTestMode = import.meta.env.MODE === 'test'
 
 export const isSupabaseConfigured = Boolean(
-  supabaseUrl &&
+  !isTestMode &&
+    supabaseUrl &&
     supabaseKey &&
     !supabaseUrl.includes('your-project-ref') &&
     !supabaseKey.includes('your_key_here'),

@@ -414,9 +414,26 @@ function AdminDashboard({ user, onLogout }) {
       <main className="lg:pl-72">
         <div className="border-b border-stone-200 bg-white p-5 lg:hidden">
           <div className="font-display text-2xl">Amber & Oak Admin</div>
-          <select value={activeTab} onChange={(event) => setActiveTab(event.target.value)} className="mt-4 w-full rounded-lg border border-stone-300 px-4 py-3">
-            {tabs.map((tab) => <option key={tab.id} value={tab.id}>{tab.label}</option>)}
-          </select>
+          <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
+            {tabs.map((tab) => {
+              const Icon = tab.icon
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveTab(tab.id)}
+                  className={`focus-ring inline-flex min-h-12 items-center justify-center gap-2 rounded-lg px-3 py-3 text-sm font-bold transition ${
+                    activeTab === tab.id
+                      ? 'bg-cafe-ink text-white shadow-sm'
+                      : 'border border-stone-200 bg-cafe-cream text-cafe-ink hover:border-cafe-amber hover:bg-white'
+                  }`}
+                >
+                  <Icon size={16} aria-hidden="true" />
+                  <span>{tab.label}</span>
+                </button>
+              )
+            })}
+          </div>
         </div>
         <div className="p-5 lg:p-8">
           {loading ? <p className="rounded-lg bg-white p-5 shadow-sm">Loading dashboard data...</p> : null}
