@@ -6,6 +6,10 @@ export function formatCurrency(value) {
   }).format(Number(value || 0))
 }
 
+export function formatMenuPrice(value) {
+  return `RM ${Number(value || 0).toLocaleString('en-MY', { maximumFractionDigits: 0 })}`
+}
+
 export function formatDate(value) {
   if (!value) return '-'
   return new Intl.DateTimeFormat('en-MY', { dateStyle: 'medium' }).format(new Date(value))

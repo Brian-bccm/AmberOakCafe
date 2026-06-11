@@ -1,7 +1,7 @@
 import { BadgeCheck } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { fetchPublicMenuItems, fallbackMenu } from '../services/menuService.js'
-import { formatCurrency } from '../utils/formatters.js'
+import { formatMenuPrice } from '../utils/formatters.js'
 
 function Menu() {
   const [menuItems, setMenuItems] = useState(fallbackMenu())
@@ -46,8 +46,8 @@ function Menu() {
                   </span>
                   <h3 className="mt-4 font-display text-2xl text-cafe-ink">{item.name}</h3>
                 </div>
-                <p className="shrink-0 whitespace-nowrap rounded-full bg-cafe-ink px-4 py-2 text-sm font-bold leading-none text-white">
-                  {formatCurrency(item.price)}
+                <p className="inline-flex h-12 min-w-[76px] shrink-0 items-center justify-center whitespace-nowrap rounded-full bg-cafe-ink px-4 text-sm font-bold leading-none text-white">
+                  {formatMenuPrice(item.price)}
                 </p>
               </div>
               <p className="mt-4 text-sm leading-7 text-stone-600">{item.description}</p>
