@@ -1,20 +1,26 @@
+import { buildWhatsAppLink, orderMessage, promotionMessage, reservationMessage } from '../utils/whatsapp.js'
+
 export const cafe = {
   name: 'Amber & Oak Cafe',
   tagline: 'All-day brunch, craft coffee, and warm hospitality in Bangsar.',
   phoneDisplay: '+60 12-345 6789',
   phoneRaw: '60123456789',
-  whatsappLink:
-    'https://wa.me/60123456789?text=Hi%20Amber%20%26%20Oak%20Cafe%2C%20I%20would%20like%20to%20make%20a%20reservation.',
   email: 'hello@amberandoak.example',
   address: '28, Jalan Telawi, Bangsar, 59100 Kuala Lumpur',
   mapUrl: 'https://www.google.com/maps/search/?api=1&query=Jalan%20Telawi%203%20Bangsar%20Kuala%20Lumpur',
 }
 
+cafe.whatsappLink = buildWhatsAppLink(cafe.phoneRaw, reservationMessage(cafe.name))
+cafe.whatsappOrderLink = buildWhatsAppLink(cafe.phoneRaw, orderMessage(cafe.name))
+cafe.whatsappPromotionLink = buildWhatsAppLink(cafe.phoneRaw, promotionMessage(cafe.name))
+
 export const navItems = [
   { label: 'About', href: '#about' },
   { label: 'Menu', href: '#menu' },
+  { label: 'Order', href: '#order' },
   { label: 'Gallery', href: '#gallery' },
   { label: 'Special Offer', href: '#promotion' },
+  { label: 'Reserve', href: '#reservation' },
   { label: 'Location', href: '#location' },
   { label: 'Contact', href: '#contact' },
 ]

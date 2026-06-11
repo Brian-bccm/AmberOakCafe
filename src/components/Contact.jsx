@@ -1,19 +1,18 @@
 import { Mail, Phone, Send } from 'lucide-react'
 import { useState } from 'react'
 import { cafe } from '../data/siteContent.js'
+import { submitContactMessage } from '../services/customerService.js'
 
 const initialForm = {
   name: '',
   phone: '',
+  email: '',
   message: '',
-}
-
-function encodeForm(formData) {
-  return new URLSearchParams(formData).toString()
 }
 
 function Contact() {
   const [form, setForm] = useState(initialForm)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [status, setStatus] = useState({ type: 'idle', message: '' })
 
   const handleChange = (event) => {
@@ -21,7 +20,7 @@ function Contact() {
     setForm((current) => ({ ...current, [name]: value }))
   }
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault()
 
     if (!form.name.trim() || !form.phone.trim() || !form.message.trim()) {
@@ -32,22 +31,25 @@ function Contact() {
       return
     }
 
-    const formData = new FormData(event.currentTarget)
-    const hostname = window.location.hostname
-
-    if (hostname && !['localhost', '127.0.0.1'].includes(hostname)) {
-      fetch('/', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: encodeForm(formData),
-      }).catch(() => {})
+    setIsSubmitting(true)
+    try {
+      const result = await submitContactMessage(form)
+      setStatus({
+        type: 'success',
+        message:
+          result.mode === 'demo'
+            ? `Thanks, ${form.name.split(' ')[0]}. Demo mode is active; connect Supabase to save enquiries.`
+            : `Thanks, ${form.name.split(' ')[0]}. Your enquiry was saved and the cafe team will reply soon.`,
+      })
+      setForm(initialForm)
+    } catch (error) {
+      setStatus({
+        type: 'error',
+        message: error.message || 'Your enquiry could not be saved. Please try WhatsApp instead.',
+      })
+    } finally {
+      setIsSubmitting(false)
     }
-
-    setStatus({
-      type: 'success',
-      message: `Thanks, ${form.name.split(' ')[0]}. Your enquiry is ready and the cafe team will reply soon.`,
-    })
-    setForm(initialForm)
   }
 
   return (
@@ -57,7 +59,7 @@ function Contact() {
           <p className="eyebrow">Contact</p>
           <h2 className="section-title">Send an enquiry or reserve through WhatsApp.</h2>
           <p className="section-copy">
-            The form is configured for Netlify Forms on deployment, while WhatsApp gives customers a fast direct action.
+            The form saves enquiries to Supabase when configured, while WhatsApp gives customers a fast direct action.
           </p>
 
           <div className="mt-8 grid gap-4">
@@ -123,6 +125,18 @@ function Contact() {
                 autoComplete="tel"
               />
             </label>
+            <label className="grid gap-2 text-sm font-bold text-cafe-ink">
+              Email
+              <input
+                name="email"
+                type="email"
+                value={form.email}
+                onChange={handleChange}
+                className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3 font-normal text-cafe-ink"
+                placeholder="Optional"
+                autoComplete="email"
+              />
+            </label>
           </div>
 
           <label className="mt-5 grid gap-2 text-sm font-bold text-cafe-ink">
@@ -138,10 +152,11 @@ function Contact() {
 
           <button
             type="submit"
+            disabled={isSubmitting}
             className="focus-ring mt-6 inline-flex w-full items-center justify-center gap-2 rounded-full bg-cafe-ink px-6 py-4 text-sm font-bold text-white transition hover:bg-cafe-forest sm:w-auto"
           >
             <Send size={18} aria-hidden="true" />
-            Send Enquiry
+            {isSubmitting ? 'Saving...' : 'Send Enquiry'}
           </button>
 
           <div

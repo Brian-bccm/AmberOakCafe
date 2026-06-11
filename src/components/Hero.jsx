@@ -34,7 +34,7 @@ function Hero() {
               <ChevronRight size={18} aria-hidden="true" />
             </a>
             <a
-              href={cafe.whatsappLink}
+              href={cafe.whatsappOrderLink}
               className="focus-ring inline-flex items-center justify-center gap-2 rounded-full border border-white/35 bg-white/10 px-6 py-4 text-sm font-bold text-white backdrop-blur transition hover:bg-white hover:text-cafe-ink"
               target="_blank"
               rel="noreferrer"

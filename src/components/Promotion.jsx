@@ -25,7 +25,7 @@ function Promotion() {
             opening promotions.
           </p>
           <a
-            href={cafe.whatsappLink}
+            href={cafe.whatsappPromotionLink}
             className="focus-ring mt-8 inline-flex items-center gap-2 rounded-full bg-cafe-amber px-6 py-4 text-sm font-bold text-cafe-ink transition hover:bg-amber-300"
             target="_blank"
             rel="noreferrer"

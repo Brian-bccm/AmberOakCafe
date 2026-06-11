@@ -1,7 +1,27 @@
 import { BadgeCheck } from 'lucide-react'
-import { menuItems } from '../data/siteContent.js'
+import { useEffect, useState } from 'react'
+import { fetchPublicMenuItems, fallbackMenu } from '../services/menuService.js'
+import { formatCurrency } from '../utils/formatters.js'
 
 function Menu() {
+  const [menuItems, setMenuItems] = useState(fallbackMenu())
+  const [source, setSource] = useState('fallback')
+
+  useEffect(() => {
+    let ignore = false
+
+    fetchPublicMenuItems().then((result) => {
+      if (!ignore) {
+        setMenuItems(result.data)
+        setSource(result.source)
+      }
+    })
+
+    return () => {
+      ignore = true
+    }
+  }, [])
+
   return (
     <section id="menu" className="bg-white">
       <div className="section-shell">
@@ -11,8 +31,7 @@ function Menu() {
             <h2 className="section-title">Cafe plates that photograph well and sell easily.</h2>
           </div>
           <p className="max-w-md text-base leading-7 text-stone-600">
-            Prices are realistic placeholders for a Bangsar-style premium cafe and can be swapped for any real client
-            menu.
+            Prices can be managed from the admin dashboard. {source === 'fallback' ? 'Demo fallback menu is showing until Supabase is connected.' : 'Live menu data is loaded from Supabase.'}
           </p>
         </div>
 
@@ -27,7 +46,7 @@ function Menu() {
                   </span>
                   <h3 className="mt-4 font-display text-2xl text-cafe-ink">{item.name}</h3>
                 </div>
-                <p className="rounded-full bg-cafe-ink px-4 py-2 text-sm font-bold text-white">{item.price}</p>
+                <p className="rounded-full bg-cafe-ink px-4 py-2 text-sm font-bold text-white">{formatCurrency(item.price)}</p>
               </div>
               <p className="mt-4 text-sm leading-7 text-stone-600">{item.description}</p>
             </article>
