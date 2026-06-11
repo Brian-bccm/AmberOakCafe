@@ -1,14 +1,9 @@
 {
-  "title": "Amber & Oak Cafe Client Presentation",
-  "duration_seconds": 370,
-  "slides": [
-    "slide-01-intro.png",
-    "slide-02-homepage.png",
-    "slide-03-navigation.png",
-    "slide-04-business-sections.png",
-    "slide-05-contact-actions.png",
-    "slide-06-mobile.png",
-    "slide-07-proof.png",
-    "slide-08-handoff.png"
-  ]
+  "title": "Amber & Oak Cafe Client Tutorial",
+  "audience": "Non-technical restaurant owner/client",
+  "voice": "Microsoft Zira Desktop, rate -1",
+  "duration_seconds": 359.94,
+  "output": "C:\\Users\\Admin\\CodexProject\\restaurant-website\\presentation-video\\amber-oak-cafe-client-tutorial.mp4",
+  "live_site": "https://amber-oak-cafe-brian-bccm.netlify.app",
+  "github_repo": "https://github.com/Brian-bccm/AmberOakCafe"
 }

@@ -27,3 +27,7 @@ presentation-video/amber-oak-cafe-client-presentation.mp4
 *.njsproj
 *.sln
 *.sw?
+presentation-video/__pycache__/
+presentation-video/client-tutorial-narration.wav
+presentation-video/amber-oak-cafe-client-tutorial-video-only.mp4
+presentation-video/make_tutorial_narration.ps1
