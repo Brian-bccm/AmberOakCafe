@@ -1,6 +1,7 @@
 import { menuItems as fallbackMenuItems } from '../data/siteContent.js'
 import { isSupabaseConfigured, requireSupabase } from '../lib/supabaseClient.js'
 import { normalizePrice } from '../utils/formatters.js'
+import { logAuditEvent } from './auditService.js'
 
 function toDbMenuItem(item) {
   return {
@@ -94,6 +95,7 @@ export async function createMenuItem(item) {
   const supabase = requireSupabase()
   const { data, error } = await supabase.from('menu_items').insert(toDbMenuItem(item)).select().single()
   if (error) throw error
+  await logAuditEvent({ action: 'menu.create', entityType: 'menu_item', entityId: data.id, summary: `Created menu item ${data.name}.`, metadata: { name: data.name } })
   return data
 }
 
@@ -101,6 +103,7 @@ export async function updateMenuItem(id, item) {
   const supabase = requireSupabase()
   const { data, error } = await supabase.from('menu_items').update(toDbMenuItem(item)).eq('id', id).select().single()
   if (error) throw error
+  await logAuditEvent({ action: 'menu.update', entityType: 'menu_item', entityId: id, summary: `Updated menu item ${data.name}.`, metadata: { name: data.name } })
   return data
 }
 
@@ -108,4 +111,5 @@ export async function deleteMenuItem(id) {
   const supabase = requireSupabase()
   const { error } = await supabase.from('menu_items').delete().eq('id', id)
   if (error) throw error
+  await logAuditEvent({ action: 'menu.delete', entityType: 'menu_item', entityId: id, summary: 'Deleted menu item.' })
 }

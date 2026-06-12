@@ -1,4 +1,5 @@
 import { normalizePrice } from '../utils/formatters.js'
+import { totalFromOrder } from './orderTotals.js'
 
 export const reportRanges = {
   daily: 'Daily report',
@@ -79,6 +80,7 @@ export function calculateAnalytics({ reservations = [], messages = [], orders = 
     pendingAmount,
     monthlyRevenueAmount: monthlyRevenueChart.at(-1)?.revenue || 0,
     totalOrders: orders.length,
+    grossOrderValue: orders.filter((order) => order.status !== 'cancelled').reduce((sum, order) => sum + totalFromOrder(order), 0),
     paidPaymentsTotal: paidPayments.length,
     pendingPaymentsTotal: pendingPayments.length,
     totalCustomers,

@@ -1,5 +1,7 @@
 import { isSupabaseConfigured, requireSupabase } from '../lib/supabaseClient.js'
 import { normalizePrice } from '../utils/formatters.js'
+import { fetchBusinessSettings } from './contentService.js'
+import { calculateOrderTotals } from './orderTotals.js'
 
 export async function submitContactMessage(form) {
   if (!isSupabaseConfigured) {
@@ -48,6 +50,8 @@ export async function submitOrder({ customer, items, notes }) {
   const supabase = requireSupabase()
   const orderItems = items.filter((item) => Number(item.quantity) > 0)
   const subtotal = orderItems.reduce((sum, item) => sum + normalizePrice(item.price) * Number(item.quantity), 0)
+  const settings = await fetchBusinessSettings()
+  const totals = calculateOrderTotals(subtotal, settings)
 
   const { data: order, error: orderError } = await supabase
     .from('orders')
@@ -56,7 +60,10 @@ export async function submitOrder({ customer, items, notes }) {
       phone: customer.phone.trim(),
       email: customer.email?.trim() || null,
       order_type: customer.order_type || 'pickup',
-      subtotal,
+      subtotal: totals.subtotal,
+      service_charge_amount: totals.serviceChargeAmount,
+      tax_amount: totals.taxAmount,
+      total_amount: totals.totalAmount,
       notes: notes?.trim() || null,
     })
     .select()

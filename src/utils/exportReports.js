@@ -1,6 +1,7 @@
 import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { formatCurrency, formatDateTime } from './formatters.js'
+import { totalFromOrder } from '../services/orderTotals.js'
 
 function orderRows(report) {
   return report.rows.orders.map((order) => ({
@@ -9,7 +10,7 @@ function orderRows(report) {
     Phone: order.phone,
     Status: order.status,
     Payment: order.payment_status || 'unpaid',
-    Revenue: Number(order.subtotal || 0),
+    Total: totalFromOrder(order),
   }))
 }
 
@@ -29,7 +30,7 @@ export function exportReportToPdf(report) {
   doc.setFontSize(18)
   doc.text(`Amber & Oak Cafe - ${report.title}`, 14, 18)
   doc.setFontSize(11)
-  doc.text(`Revenue: ${formatCurrency(report.analytics.totalRevenue)}`, 14, 30)
+  doc.text(`Paid revenue: ${formatCurrency(report.analytics.totalRevenue)}`, 14, 30)
   doc.text(`Orders: ${report.analytics.totalOrders}`, 14, 38)
   doc.text(`Customers: ${report.analytics.totalCustomers}`, 14, 46)
 
@@ -52,12 +53,13 @@ function toCsv(rows) {
 export function exportReportToExcel(report) {
   const rows = [
     { Section: 'Summary', Metric: 'Total revenue', Value: report.analytics.totalRevenue },
+    { Section: 'Summary', Metric: 'Gross order value', Value: report.analytics.grossOrderValue },
     { Section: 'Summary', Metric: 'Total orders', Value: report.analytics.totalOrders },
     { Section: 'Summary', Metric: 'Total customers', Value: report.analytics.totalCustomers },
     { Section: 'Summary', Metric: 'Reservations', Value: report.analytics.reservationsTotal },
     { Section: 'Summary', Metric: 'Pending payment amount', Value: report.analytics.pendingAmount },
     ...paymentRows(report).map((row) => ({ Section: 'Payments', Metric: `${row.Customer} (${row.Method} / ${row.Status})`, Value: row.Amount })),
-    ...orderRows(report).map((row) => ({ Section: 'Orders', Metric: `${row.Customer} (${row.Payment})`, Value: row.Revenue })),
+    ...orderRows(report).map((row) => ({ Section: 'Orders', Metric: `${row.Customer} (${row.Payment})`, Value: row.Total })),
     ...report.analytics.topSellingItems.map((item) => ({ Section: 'Top Items', Metric: item.name, Value: item.quantity })),
   ]
   const blob = new Blob([toCsv(rows)], { type: 'text/csv;charset=utf-8;' })

@@ -1,6 +1,7 @@
 import { cafe, galleryImages, openingHours } from '../data/siteContent.js'
 import { isSupabaseConfigured, requireSupabase } from '../lib/supabaseClient.js'
 import { buildWhatsAppLink } from '../utils/whatsapp.js'
+import { logAuditEvent } from './auditService.js'
 
 const defaultOpeningHoursText = openingHours.map((item) => `${item.day}: ${item.time}`).join('\n')
 
@@ -42,6 +43,12 @@ export const defaultBusinessSettings = {
   provider: 'manual',
   providerMode: 'manual',
   providerPublicLabel: 'Manual payment tracking',
+  serviceChargePercent: 0,
+  taxPercent: 0,
+  instagramUrl: '',
+  facebookUrl: '',
+  tiktokUrl: '',
+  websiteUrl: '',
 }
 
 export const defaultGalleryItems = galleryImages.map((image, index) => ({
@@ -118,6 +125,7 @@ export async function saveBusinessSettings(settings) {
   const payload = { id: 'default', settings: { ...defaultBusinessSettings, ...settings }, updated_at: new Date().toISOString() }
   const { data, error } = await supabase.from('business_settings').upsert(payload).select().single()
   if (error) throw error
+  await logAuditEvent({ action: 'business_settings.update', entityType: 'business_settings', entityId: 'default', summary: 'Business settings updated.' })
   return normalizeSettingsRow(data)
 }
 
@@ -151,6 +159,7 @@ export async function createGalleryItem(item) {
   const supabase = requireSupabase()
   const { data, error } = await supabase.from('gallery_items').insert(toGalleryPayload(item)).select().single()
   if (error) throw error
+  await logAuditEvent({ action: 'gallery.create', entityType: 'gallery_item', entityId: data.id, summary: `Created gallery item ${data.title}.` })
   return data
 }
 
@@ -158,6 +167,7 @@ export async function updateGalleryItem(id, item) {
   const supabase = requireSupabase()
   const { data, error } = await supabase.from('gallery_items').update(toGalleryPayload(item)).eq('id', id).select().single()
   if (error) throw error
+  await logAuditEvent({ action: 'gallery.update', entityType: 'gallery_item', entityId: id, summary: `Updated gallery item ${data.title}.` })
   return data
 }
 
@@ -165,6 +175,7 @@ export async function deleteGalleryItem(id) {
   const supabase = requireSupabase()
   const { error } = await supabase.from('gallery_items').delete().eq('id', id)
   if (error) throw error
+  await logAuditEvent({ action: 'gallery.delete', entityType: 'gallery_item', entityId: id, summary: 'Deleted gallery item.' })
 }
 
 export async function fetchPublicPromotions() {
@@ -196,6 +207,7 @@ export async function createPromotion(item) {
   const supabase = requireSupabase()
   const { data, error } = await supabase.from('promotions').insert(toPromotionPayload(item)).select().single()
   if (error) throw error
+  await logAuditEvent({ action: 'promotion.create', entityType: 'promotion', entityId: data.id, summary: `Created promotion ${data.title}.` })
   return data
 }
 
@@ -203,6 +215,7 @@ export async function updatePromotion(id, item) {
   const supabase = requireSupabase()
   const { data, error } = await supabase.from('promotions').update(toPromotionPayload(item)).eq('id', id).select().single()
   if (error) throw error
+  await logAuditEvent({ action: 'promotion.update', entityType: 'promotion', entityId: id, summary: `Updated promotion ${data.title}.` })
   return data
 }
 
@@ -210,6 +223,7 @@ export async function deletePromotion(id) {
   const supabase = requireSupabase()
   const { error } = await supabase.from('promotions').delete().eq('id', id)
   if (error) throw error
+  await logAuditEvent({ action: 'promotion.delete', entityType: 'promotion', entityId: id, summary: 'Deleted promotion.' })
 }
 
 export async function uploadRestaurantAsset(file, folder = 'uploads') {

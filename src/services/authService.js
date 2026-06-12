@@ -1,7 +1,25 @@
 import { requireSupabase } from '../lib/supabaseClient.js'
 
+export const staffRoles = ['admin', 'manager', 'staff']
+
+export function getUserRole(user) {
+  return user?.app_metadata?.role || ''
+}
+
 export function isAdminUser(user) {
-  return user?.app_metadata?.role === 'admin'
+  return getUserRole(user) === 'admin'
+}
+
+export function isStaffUser(user) {
+  return staffRoles.includes(getUserRole(user))
+}
+
+export function canAccessModule(user, moduleId) {
+  const role = getUserRole(user)
+  if (role === 'admin') return true
+  if (role === 'manager') return !['audit'].includes(moduleId)
+  if (role === 'staff') return ['overview', 'reservations', 'orders', 'payments'].includes(moduleId)
+  return false
 }
 
 export async function getSessionUser() {
@@ -20,9 +38,9 @@ export async function signInAdmin(email, password) {
   const { data, error } = await supabase.auth.signInWithPassword({ email, password })
   if (error) throw error
 
-  if (!isAdminUser(data.user)) {
+  if (!isStaffUser(data.user)) {
     await supabase.auth.signOut()
-    throw new Error('This account is not configured as an admin.')
+    throw new Error('This account is not configured as restaurant staff.')
   }
 
   return data.user

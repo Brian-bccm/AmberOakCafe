@@ -15,8 +15,8 @@ values
 on conflict do nothing;
 
 with created_order as (
-  insert into public.orders (customer_name, phone, email, order_type, status, payment_status, subtotal, notes, created_at)
-  values ('Mei Wong', '016-222 7788', 'mei@example.com', 'pickup', 'completed', 'Paid', 62, 'Pickup at 1pm.', now() - interval '5 days')
+  insert into public.orders (customer_name, phone, email, order_type, status, payment_status, subtotal, service_charge_amount, tax_amount, total_amount, notes, created_at)
+  values ('Mei Wong', '016-222 7788', 'mei@example.com', 'pickup', 'completed', 'Paid', 62, 0, 0, 62, 'Pickup at 1pm.', now() - interval '5 days')
   returning id
 )
 insert into public.order_items (order_id, item_name, unit_price, quantity, customizations, notes)
@@ -32,8 +32,8 @@ select id, customer_name, subtotal, 'Credit/Debit Card', 'Paid', 'DEMO-CARD-1001
 where not exists (select 1 from public.payment_records where transaction_reference = 'DEMO-CARD-1001');
 
 with created_order as (
-  insert into public.orders (customer_name, phone, email, order_type, status, payment_status, subtotal, notes, created_at)
-  values ('Farid Omar', '019-555 1200', 'farid@example.com', 'pickup', 'completed', 'Paid', 48, 'No cutlery needed.', now() - interval '12 days')
+  insert into public.orders (customer_name, phone, email, order_type, status, payment_status, subtotal, service_charge_amount, tax_amount, total_amount, notes, created_at)
+  values ('Farid Omar', '019-555 1200', 'farid@example.com', 'pickup', 'completed', 'Paid', 48, 0, 0, 48, 'No cutlery needed.', now() - interval '12 days')
   returning id
 )
 insert into public.order_items (order_id, item_name, unit_price, quantity, customizations, notes)
@@ -84,7 +84,13 @@ values (
     "paymentEnabledMethods": "Cash, Credit/Debit Card, Online Bank Transfer, TNG eWallet, GrabPay, DuitNow QR",
     "provider": "manual",
     "providerMode": "manual",
-    "providerPublicLabel": "Manual payment tracking"
+    "providerPublicLabel": "Manual payment tracking",
+    "serviceChargePercent": 0,
+    "taxPercent": 0,
+    "instagramUrl": "",
+    "facebookUrl": "",
+    "tiktokUrl": "",
+    "websiteUrl": ""
   }'::jsonb
 )
 on conflict (id) do nothing;
@@ -95,6 +101,13 @@ values
   ('Cafe interior', 'https://images.unsplash.com/photo-1554118811-1e0d58224f24?auto=format&fit=crop&w=900&q=80', 'Warm modern cafe interior with tables and pendant lights', true, 2),
   ('Brunch plates', 'https://images.unsplash.com/photo-1512621776951-a57141f2eefd?auto=format&fit=crop&w=900&q=80', 'Colorful brunch plate with vegetables and grains', true, 3),
   ('Kitchen craft', 'https://images.unsplash.com/photo-1551218808-94e220e084d2?auto=format&fit=crop&w=900&q=80', 'Chef plating a premium dish in a restaurant kitchen', true, 4)
+on conflict do nothing;
+
+insert into public.reviews (customer_name, rating, comment, menu_item_name, visited_date, status, created_at)
+values
+  ('Aina Rahman', 5, 'Warm service, polished brunch plates, and the coffee was excellent.', 'Truffle Mushroom Toast', current_date - 8, 'approved', now() - interval '8 days'),
+  ('Daniel Lee', 4, 'Good spot for client meetings. The menu feels premium but still comfortable.', 'Smoked Duck Benedict', current_date - 4, 'approved', now() - interval '4 days'),
+  ('Siti Noor', 5, 'Reservation was smooth and the staff confirmed our table quickly.', null, current_date - 2, 'pending', now() - interval '2 days')
 on conflict do nothing;
 
 insert into public.promotions (title, description, offer_text, image_url, whatsapp_message, is_active, display_order)

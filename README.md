@@ -27,13 +27,15 @@ Amber & Oak Cafe is a React + Supabase + Netlify project built as a realistic fr
 - Contact form saves to `contact_messages`.
 - Reservation form saves to `reservations`.
 - Order form saves to `orders` and `order_items`, including item notes and customizations.
+- Review form saves to `reviews` as pending and only approved reviews appear publicly.
 - Menu loads from Supabase and falls back to clearly demo seed content when Supabase is not configured.
 - Business settings load from Supabase so each client can edit restaurant name, contact info, WhatsApp messages, homepage copy, SEO text, opening hours, and payment instructions without code changes.
 - Gallery and promotions can be managed from the admin dashboard.
 - Supabase Storage bucket `restaurant-assets` is used for menu, gallery, promotion, hero, about, and payment QR images.
-- Admin login uses Supabase Auth and `app_metadata.role = "admin"`.
-- Admin dashboard includes overview metrics, recent activity, business settings, reservations, messages, menu CRUD, gallery, promotions, orders, payments, reports, PDF export, and CSV export.
+- Admin login uses Supabase Auth and `app_metadata.role = "admin"`, `"manager"`, or `"staff"`.
+- Admin dashboard includes overview metrics, recent activity, business settings, reservations, messages, reviews, menu CRUD, gallery, promotions, admin order creation, payments, reports, audit logs, PDF export, and CSV export.
 - Payment Management tracks manual cash/card/bank/eWallet/QR payments, links payments to orders, and generates printable receipts.
+- Audit logs track important staff actions such as reservation, review, menu, order, payment, business settings, and report changes.
 
 ## Environment Variables
 
@@ -65,6 +67,12 @@ Never expose a Supabase service-role key in this frontend project.
 }
 ```
 
+Supported roles:
+
+- `admin`: full access, including audit logs.
+- `manager`: business/content/operations access, excluding audit logs.
+- `staff`: reservations, orders, and payments operations.
+
 7. Add these Auth redirect URLs:
 
 ```text
@@ -88,6 +96,9 @@ Core tables:
 - `orders`: order header, subtotal, order status, payment status, and notes.
 - `order_items`: order lines, quantity, item price, customizations, and item notes.
 - `payment_records`: manual/admin payment tracking linked to orders where applicable.
+- `reviews`: customer ratings and comments with moderation status.
+- `audit_logs`: staff activity records.
+- `payment_gateway_events`: placeholder event table for future online payment gateways.
 - `business_settings`: editable client business profile, SEO, WhatsApp templates, location, opening hours, and payment instructions.
 - `gallery_items`: admin-managed public gallery images and captions.
 - `promotions`: admin-managed public offers and campaign copy.
@@ -104,6 +115,7 @@ Security:
 - Public users can only view available menu items.
 - Public users can view published gallery items, active promotions, and public business display settings.
 - Public users can insert reservations, contact messages, orders, and order items.
+- Public users can insert pending reviews and view approved reviews.
 - Public users cannot read private reservations, messages, orders, or payments.
 - Admin access is controlled by Supabase Auth app metadata: `role = admin`.
 
@@ -128,20 +140,24 @@ Recommended checks:
 2. Submit reservation form and confirm a row appears in `reservations`.
 3. Submit order form and confirm rows appear in `orders` and `order_items`.
 4. Confirm WhatsApp buttons open `wa.me` links with pre-filled messages.
-5. Log in as admin.
-6. Search/filter reservations, update status, and delete a test reservation.
-7. Search/filter messages, mark read/replied, and delete a test message.
-8. Add, edit, hide, and delete a test menu item.
-9. Upload a menu image and confirm it appears in the menu record.
-10. Update Business Settings and confirm public name, phone, WhatsApp message, address, opening hours, and SEO text update after refresh.
-11. Add/edit/hide a gallery item and confirm the public gallery updates.
-12. Add/edit/deactivate a promotion and confirm the public promotion updates.
-13. Submit an order and confirm payment instructions or QR details appear when enabled.
-14. Update order status and payment status.
-15. Add a manual payment record and link it to an order.
-16. Confirm completed orders have a `Paid` payment or confirm cash payment during completion.
-17. Print a receipt from a paid payment/order.
-18. Export daily, weekly, monthly, and yearly reports.
+5. Submit a review and confirm it appears as pending.
+6. Log in as admin.
+7. Search/filter reservations, update status, and delete a test reservation.
+8. Search/filter messages, mark read/replied, and delete a test message.
+9. Approve/hide/delete a review and confirm only approved reviews show publicly.
+10. Add, edit, hide, and delete a test menu item.
+11. Upload a menu image and confirm it appears in the menu record.
+12. Update Business Settings and confirm public name, phone, WhatsApp message, address, opening hours, service charge, tax, social links, and SEO text update after refresh.
+13. Add/edit/hide a gallery item and confirm the public gallery updates.
+14. Add/edit/deactivate a promotion and confirm the public promotion updates.
+15. Create an admin order and confirm subtotal, service charge, tax, and total.
+16. Submit an order and confirm payment instructions or QR details appear when enabled.
+17. Update order status and payment status.
+18. Add a manual payment record and link it to an order.
+19. Confirm completed orders have a `Paid` payment or confirm cash payment during completion.
+20. Print a receipt from a paid payment/order and confirm item lines/totals/reference display.
+21. Export daily, weekly, monthly, and yearly reports.
+22. Confirm audit log records reservation/order/payment/menu/review/report actions.
 
 ## Client Handoff Workflow
 
@@ -163,6 +179,7 @@ This project is gateway-ready but does not process cards or eWallet charges dire
 Current payment model:
 
 - Manual/admin payment tracking.
+- Payment gateway placeholder providers: Stripe, Billplz, SenangPay, ToyyibPay, and iPay88.
 - Payment methods: Cash, Credit/Debit Card, Online Bank Transfer, TNG eWallet, GrabPay, DuitNow QR, Other.
 - Payment statuses: Pending, Paid, Failed, Refunded, Cancelled.
 - Paid revenue in reports comes from `payment_records` with status `Paid`.
@@ -173,6 +190,7 @@ Future live payment gateway:
 - Add Stripe, Billplz, ToyyibPay, iPay88, or another provider through Netlify Functions or Supabase Edge Functions.
 - Do not put gateway secret keys in frontend code or public database rows.
 - Keep frontend provider fields as display/config placeholders only.
+- Store payment provider secrets only in Netlify Functions or Supabase Edge Functions.
 
 ## Deployment
 
@@ -211,6 +229,9 @@ npm run build
 - Supabase persistence: complete.
 - Admin authentication: complete.
 - Reservation management: complete.
+- Customer reviews and moderation: complete.
+- Role-based admin access: complete.
+- Audit log: complete.
 - Contact message management: complete.
 - Menu CRUD: complete.
 - Order and payment status management: complete.
@@ -220,6 +241,8 @@ npm run build
 - Promotions CMS: complete.
 - Supabase Storage image upload UI: complete.
 - Manual payment instruction and QR template: complete.
+- Service charge/tax settings: complete.
+- Payment gateway placeholder layer: complete.
 - Printable paid-order receipts: complete.
 - Sales reports and exports: complete.
 - RLS and public/private data separation: complete.

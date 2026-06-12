@@ -1,4 +1,4 @@
-import { Instagram, MessageCircle } from 'lucide-react'
+import { Facebook, Globe, Instagram, MessageCircle } from 'lucide-react'
 import { useBusinessSettings } from '../context/useBusinessSettings.js'
 import { navItems } from '../data/siteContent.js'
 
@@ -19,9 +19,21 @@ function Footer() {
               {item.label}
             </a>
           ))}
-          <a href="#" className="focus-ring rounded-full p-2 text-stone-300 hover:text-white" aria-label="Instagram">
-            <Instagram size={19} aria-hidden="true" />
-          </a>
+          {business.instagramUrl ? (
+            <a href={business.instagramUrl} className="focus-ring rounded-full p-2 text-stone-300 hover:text-white" aria-label="Instagram" target="_blank" rel="noreferrer">
+              <Instagram size={19} aria-hidden="true" />
+            </a>
+          ) : null}
+          {business.facebookUrl ? (
+            <a href={business.facebookUrl} className="focus-ring rounded-full p-2 text-stone-300 hover:text-white" aria-label="Facebook" target="_blank" rel="noreferrer">
+              <Facebook size={19} aria-hidden="true" />
+            </a>
+          ) : null}
+          {business.websiteUrl ? (
+            <a href={business.websiteUrl} className="focus-ring rounded-full p-2 text-stone-300 hover:text-white" aria-label="Website" target="_blank" rel="noreferrer">
+              <Globe size={19} aria-hidden="true" />
+            </a>
+          ) : null}
           <a href={business.whatsappLink} className="focus-ring rounded-full p-2 text-stone-300 hover:text-white" aria-label="WhatsApp footer">
             <MessageCircle size={19} aria-hidden="true" />
           </a>

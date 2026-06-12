@@ -20,6 +20,7 @@ export const navItems = [
   { label: 'Menu', href: '#menu' },
   { label: 'Order', href: '#order' },
   { label: 'Gallery', href: '#gallery' },
+  { label: 'Reviews', href: '#reviews' },
   { label: 'Special Offer', href: '#promotion' },
   { label: 'Reserve', href: '#reservation' },
   { label: 'Location', href: '#location' },

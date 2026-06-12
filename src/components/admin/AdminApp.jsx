@@ -1,4 +1,4 @@
-import { BarChart3, CreditCard, Image, LogOut, Megaphone, MessageSquare, Printer, ReceiptText, Settings, Store, Utensils, Users } from 'lucide-react'
+import { BarChart3, ClipboardList, CreditCard, Image, LogOut, Megaphone, MessageSquare, Printer, ReceiptText, Settings, Star, Store, Utensils, Users } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { isSupabaseConfigured } from '../../lib/supabaseClient.js'
@@ -18,8 +18,10 @@ import {
   updateOrderPaymentStatus,
   updateOrderStatus,
   updateReservationStatus,
+  createAdminOrder,
 } from '../../services/adminService.js'
-import { getSessionUser, isAdminUser, signInAdmin, signOutAdmin } from '../../services/authService.js'
+import { fetchAuditLogs, logAuditEvent } from '../../services/auditService.js'
+import { canAccessModule, getSessionUser, getUserRole, isStaffUser, signInAdmin, signOutAdmin } from '../../services/authService.js'
 import {
   createGalleryItem,
   createPromotion,
@@ -35,7 +37,10 @@ import {
   uploadRestaurantAsset,
 } from '../../services/contentService.js'
 import { createMenuItem, deleteMenuItem, fetchAdminMenuItems, stringifyCustomizationOptions, updateMenuItem } from '../../services/menuService.js'
+import { calculateOrderTotals, totalFromOrder } from '../../services/orderTotals.js'
+import { createPaymentIntent, paymentProviders } from '../../services/paymentProviderService.js'
 import { buildReport, calculateAnalytics } from '../../services/reportService.js'
+import { deleteReview, fetchAdminReviews, updateReviewStatus } from '../../services/reviewService.js'
 import { exportReportToExcel, exportReportToPdf } from '../../utils/exportReports.js'
 import { formatCurrency, formatDate, formatDateTime } from '../../utils/formatters.js'
 
@@ -45,11 +50,13 @@ const tabs = [
   { id: 'reservations', label: 'Reservations', icon: Users },
   { id: 'messages', label: 'Messages', icon: MessageSquare },
   { id: 'menu', label: 'Menu CRUD', icon: Utensils },
+  { id: 'reviews', label: 'Reviews', icon: Star },
   { id: 'gallery', label: 'Gallery', icon: Image },
   { id: 'promotions', label: 'Promotions', icon: Megaphone },
   { id: 'orders', label: 'Orders', icon: ReceiptText },
   { id: 'payments', label: 'Payments', icon: CreditCard },
   { id: 'reports', label: 'Reports', icon: Settings },
+  { id: 'audit', label: 'Audit Log', icon: ClipboardList },
 ]
 
 const paymentMethods = ['Cash', 'Credit/Debit Card', 'Online Bank Transfer', 'TNG eWallet', 'GrabPay', 'DuitNow QR', 'Other']
@@ -150,10 +157,15 @@ function ImageUploadField({ label, value, onUploaded, folder }) {
   )
 }
 
-function printReceipt(payment, order) {
+function printReceipt(payment, order, business = defaultBusinessSettings) {
   const receipt = window.open('', '_blank', 'width=420,height=640')
   if (!receipt) return
   const orderNumber = order?.id ? order.id.slice(0, 8).toUpperCase() : payment.order_id?.slice(0, 8).toUpperCase() || 'MANUAL'
+  const items = order?.order_items || []
+  const subtotal = formatCurrency(order?.subtotal || payment.amount)
+  const serviceCharge = formatCurrency(order?.service_charge_amount || 0)
+  const tax = formatCurrency(order?.tax_amount || 0)
+  const total = formatCurrency(order?.total_amount || payment.amount)
   receipt.document.write(`
     <html>
       <head>
@@ -164,19 +176,26 @@ function printReceipt(payment, order) {
           .muted { color: #666; font-size: 13px; }
           .row { display: flex; justify-content: space-between; border-bottom: 1px solid #eee; padding: 10px 0; gap: 16px; }
           .total { font-size: 22px; font-weight: 700; }
+          .item { border-bottom: 1px dashed #ddd; padding: 8px 0; }
           @media print { button { display: none; } }
         </style>
       </head>
       <body>
-        <h1>Amber & Oak Cafe</h1>
+        <h1>${business.name || 'Amber & Oak Cafe'}</h1>
+        <p class="muted">${business.address || ''}</p>
+        <p class="muted">${business.phoneDisplay || ''}</p>
         <p class="muted">Payment Receipt</p>
         <div class="row"><strong>Order No.</strong><span>${orderNumber}</span></div>
         <div class="row"><strong>Customer</strong><span>${payment.customer_name}</span></div>
+        ${items.length ? `<h2>Items</h2>${items.map((item) => `<div class="item"><strong>${item.quantity}x ${item.item_name}</strong><br><span class="muted">${formatCurrency(item.unit_price)} each ${item.notes ? `- ${item.notes}` : ''}</span><span style="float:right">${formatCurrency(item.line_total || item.unit_price * item.quantity)}</span></div>`).join('')}` : ''}
+        <div class="row"><strong>Subtotal</strong><span>${subtotal}</span></div>
+        <div class="row"><strong>Service Charge</strong><span>${serviceCharge}</span></div>
+        <div class="row"><strong>Tax</strong><span>${tax}</span></div>
         <div class="row"><strong>Payment Method</strong><span>${payment.payment_method}</span></div>
         <div class="row"><strong>Status</strong><span>${payment.payment_status}</span></div>
         <div class="row"><strong>Date</strong><span>${formatDateTime(payment.payment_date)}</span></div>
         <div class="row"><strong>Reference</strong><span>${payment.transaction_reference || '-'}</span></div>
-        <div class="row total"><strong>Amount</strong><span>${formatCurrency(payment.amount)}</span></div>
+        <div class="row total"><strong>Total</strong><span>${total}</span></div>
         <p class="muted">This receipt was generated from the admin payment tracking system.</p>
         <button onclick="window.print()">Print Receipt</button>
       </body>
@@ -222,7 +241,7 @@ function AdminLogin({ onLogin }) {
       <form onSubmit={submit} className="mx-auto max-w-md rounded-lg border border-stone-200 bg-white p-8 shadow-soft">
         <p className="eyebrow">Admin Login</p>
         <h1 className="mt-3 font-display text-4xl">Amber & Oak Cafe</h1>
-        <p className="mt-3 text-sm leading-6 text-stone-600">Sign in with a Supabase Auth user that has app_metadata.role set to admin.</p>
+        <p className="mt-3 text-sm leading-6 text-stone-600">Sign in with a Supabase Auth user that has app_metadata.role set to admin, manager, or staff.</p>
         <div className="mt-6 grid gap-4">
           <input type="email" value={form.email} onChange={(event) => setForm((current) => ({ ...current, email: event.target.value }))} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3" placeholder="Admin email" />
           <input type="password" value={form.password} onChange={(event) => setForm((current) => ({ ...current, password: event.target.value }))} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3" placeholder="Password" />
@@ -404,6 +423,92 @@ function MessagesPanel({ rows, refresh }) {
   )
 }
 
+function AdminCreateOrderForm({ refresh }) {
+  const [menuItems, setMenuItems] = useState([])
+  const [settings, setSettings] = useState(defaultBusinessSettings)
+  const [customer, setCustomer] = useState({ name: '', phone: '', email: '', order_type: 'pickup', status: 'pending', payment_status: 'Pending' })
+  const [notes, setNotes] = useState('')
+  const [message, setMessage] = useState('')
+  const selected = menuItems.filter((item) => Number(item.quantity) > 0)
+  const subtotal = selected.reduce((sum, item) => sum + Number(item.price || 0) * Number(item.quantity || 0), 0)
+  const totals = calculateOrderTotals(subtotal, settings)
+
+  useEffect(() => {
+    queueMicrotask(async () => {
+      try {
+        const [items, business] = await Promise.all([fetchAdminMenuItems(), fetchBusinessSettings()])
+        setMenuItems(items.map((item) => ({ ...item, quantity: 0, notes: '', customizations: {} })))
+        setSettings(business)
+      } catch (error) {
+        setMessage(error.message)
+      }
+    })
+  }, [])
+
+  const updateQuantity = (id, quantity) => {
+    setMenuItems((current) => current.map((item) => (item.id === id ? { ...item, quantity } : item)))
+  }
+
+  const submit = async (event) => {
+    event.preventDefault()
+    if (!customer.name.trim() || !customer.phone.trim() || selected.length === 0) {
+      setMessage('Add customer name, phone, and at least one item.')
+      return
+    }
+
+    try {
+      const order = await createAdminOrder({ customer, items: selected, notes, settings })
+      await createPaymentIntent({ providerId: settings.provider, order })
+      setCustomer({ name: '', phone: '', email: '', order_type: 'pickup', status: 'pending', payment_status: 'Pending' })
+      setNotes('')
+      setMenuItems((current) => current.map((item) => ({ ...item, quantity: 0, notes: '', customizations: {} })))
+      setMessage('Admin order created.')
+      refresh()
+    } catch (error) {
+      setMessage(error.message)
+    }
+  }
+
+  return (
+    <form onSubmit={submit} className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
+      <h2 className="font-display text-2xl">Create order</h2>
+      <div className="mt-5 grid gap-4 lg:grid-cols-3">
+        <input value={customer.name} onChange={(event) => setCustomer((current) => ({ ...current, name: event.target.value }))} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3" placeholder="Customer name" />
+        <input value={customer.phone} onChange={(event) => setCustomer((current) => ({ ...current, phone: event.target.value }))} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3" placeholder="Phone" />
+        <input value={customer.email} onChange={(event) => setCustomer((current) => ({ ...current, email: event.target.value }))} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3" placeholder="Email optional" />
+        <select value={customer.order_type} onChange={(event) => setCustomer((current) => ({ ...current, order_type: event.target.value }))} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3">
+          <option value="pickup">Pickup</option>
+          <option value="dine-in">Dine-in</option>
+          <option value="delivery">Delivery</option>
+        </select>
+        <select value={customer.status} onChange={(event) => setCustomer((current) => ({ ...current, status: event.target.value }))} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3">
+          {['pending', 'confirmed', 'preparing', 'ready', 'completed', 'cancelled'].map((item) => <option key={item} value={item}>{item}</option>)}
+        </select>
+        <select value={customer.payment_status} onChange={(event) => setCustomer((current) => ({ ...current, payment_status: event.target.value }))} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3">
+          {paymentStatuses.map((item) => <option key={item} value={item}>{item}</option>)}
+        </select>
+      </div>
+      <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+        {menuItems.map((item) => (
+          <label key={item.id} className="grid gap-2 rounded-lg bg-cafe-cream p-4 text-sm font-bold">
+            <span>{item.name} <span className="font-normal text-stone-500">{formatCurrency(item.price)}</span></span>
+            <input type="number" min="0" max="99" value={item.quantity} onChange={(event) => updateQuantity(item.id, Number(event.target.value))} className="focus-ring rounded-lg border border-stone-300 bg-white px-4 py-2 font-normal" />
+          </label>
+        ))}
+      </div>
+      <textarea value={notes} onChange={(event) => setNotes(event.target.value)} className="focus-ring mt-5 min-h-20 w-full resize-y rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3" placeholder="Order notes" />
+      <div className="mt-5 grid gap-3 rounded-lg bg-cafe-cream p-4 text-sm sm:grid-cols-4">
+        <span><strong>Subtotal:</strong> {formatCurrency(totals.subtotal)}</span>
+        <span><strong>Service:</strong> {formatCurrency(totals.serviceChargeAmount)}</span>
+        <span><strong>Tax:</strong> {formatCurrency(totals.taxAmount)}</span>
+        <span><strong>Total:</strong> {formatCurrency(totals.totalAmount)}</span>
+      </div>
+      <button className="focus-ring mt-5 rounded-full bg-cafe-ink px-6 py-3 text-sm font-bold text-white">Create Order</button>
+      {message ? <p className="mt-4 rounded-lg bg-cafe-cream px-4 py-3 text-sm">{message}</p> : null}
+    </form>
+  )
+}
+
 function OrdersPanel({ rows, payments = [], refresh }) {
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState('all')
@@ -433,6 +538,7 @@ function OrdersPanel({ rows, payments = [], refresh }) {
 
   return (
     <div className="grid gap-4">
+      <AdminCreateOrderForm refresh={refresh} />
       <AdminFilters query={query} onQueryChange={setQuery} status={status} onStatusChange={setStatus} statusOptions={['pending', 'confirmed', 'preparing', 'ready', 'completed', 'cancelled']} placeholder="Search by customer, phone, email, or notes" />
       <DataTable
         title="Orders management"
@@ -456,7 +562,7 @@ function OrdersPanel({ rows, payments = [], refresh }) {
             {row.order_items?.length ? null : '-'}
           </div>,
           row.notes || '-',
-          formatCurrency(row.subtotal),
+          <span key={`${row.id}-revenue`}>{formatCurrency(totalFromOrder(row))}<br /><span className="text-xs text-stone-500">Subtotal {formatCurrency(row.subtotal)}</span></span>,
           <StatusSelect key={`${row.id}-payment`} value={row.payment_status || 'Pending'} options={paymentStatuses} onChange={(value) => updatePayment(row.id, value)} />,
           row.status,
           <span key={row.id} className="inline-flex flex-wrap gap-3">
@@ -569,6 +675,10 @@ function BusinessSettingsPanel() {
           <input name="mapUrl" value={form.mapUrl} onChange={change} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3" placeholder="Google Maps link" />
           <textarea name="address" value={form.address} onChange={change} className="focus-ring min-h-24 resize-y rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3 lg:col-span-2" placeholder="Address" />
           <textarea name="openingHoursText" value={form.openingHoursText} onChange={change} className="focus-ring min-h-28 resize-y rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3 lg:col-span-2" placeholder={'Monday - Friday: 7:00 AM - 9:30 PM\nSaturday - Sunday: 8:00 AM - 10:30 PM'} />
+          <input name="instagramUrl" value={form.instagramUrl} onChange={change} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3" placeholder="Instagram URL" />
+          <input name="facebookUrl" value={form.facebookUrl} onChange={change} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3" placeholder="Facebook URL" />
+          <input name="tiktokUrl" value={form.tiktokUrl} onChange={change} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3" placeholder="TikTok URL" />
+          <input name="websiteUrl" value={form.websiteUrl} onChange={change} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3" placeholder="Website URL" />
         </div>
       </section>
 
@@ -608,6 +718,11 @@ function BusinessSettingsPanel() {
           <input name="paymentEnabledMethods" value={form.paymentEnabledMethods} onChange={change} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3" placeholder="Enabled payment methods" />
           <input name="paymentQrImageUrl" value={form.paymentQrImageUrl} onChange={change} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3" placeholder="Payment QR image URL" />
           <ImageUploadField label="Upload payment QR" value={form.paymentQrImageUrl} folder="payment" onUploaded={(url) => setForm((current) => ({ ...current, paymentQrImageUrl: url }))} />
+          <input name="serviceChargePercent" type="number" min="0" step="0.1" value={form.serviceChargePercent} onChange={change} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3" placeholder="Service charge percent" />
+          <input name="taxPercent" type="number" min="0" step="0.1" value={form.taxPercent} onChange={change} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3" placeholder="Tax percent" />
+          <select name="provider" value={form.provider} onChange={change} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3">
+            {paymentProviders.map((provider) => <option key={provider.id} value={provider.id}>{provider.label}</option>)}
+          </select>
           <input name="providerPublicLabel" value={form.providerPublicLabel} onChange={change} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3" placeholder="Provider label" />
         </div>
       </section>
@@ -900,7 +1015,84 @@ function MenuCrudPanel() {
   )
 }
 
-function PaymentsPanel({ rows, orders, refresh }) {
+function ReviewsPanel({ rows, refresh }) {
+  const [query, setQuery] = useState('')
+  const [status, setStatus] = useState('all')
+  const filteredRows = rows
+    .filter((row) => matchesQuery(row, query, ['customer_name', 'comment', 'menu_item_name']))
+    .filter((row) => status === 'all' || row.status === status)
+
+  const update = async (review, nextStatus) => {
+    await updateReviewStatus(review.id, nextStatus)
+    await logAuditEvent({ action: 'review.status_update', entityType: 'review', entityId: review.id, summary: `Review marked ${nextStatus}.`, metadata: { nextStatus } })
+    refresh()
+  }
+
+  const remove = async (id) => {
+    if (!window.confirm('Delete this review?')) return
+    await deleteReview(id)
+    await logAuditEvent({ action: 'review.delete', entityType: 'review', entityId: id, summary: 'Review deleted.' })
+    refresh()
+  }
+
+  return (
+    <div className="grid gap-4">
+      <AdminFilters query={query} onQueryChange={setQuery} status={status} onStatusChange={setStatus} statusOptions={['pending', 'approved', 'hidden']} placeholder="Search by customer, menu item, or comment" />
+      <DataTable
+        title="Customer reviews"
+        rows={filteredRows}
+        headers={['Date', 'Customer', 'Rating', 'Comment', 'Status', 'Action']}
+        render={(row) => [
+          formatDateTime(row.created_at),
+          <span key={`${row.id}-customer`}>{row.customer_name}<br /><span className="text-xs text-stone-500">{row.menu_item_name || '-'}</span></span>,
+          `${row.rating} / 5`,
+          row.comment,
+          row.status,
+          <span key={row.id} className="inline-flex flex-wrap gap-3">
+            <StatusSelect value={row.status} options={['pending', 'approved', 'hidden']} onChange={(value) => update(row, value)} />
+            <DangerButton onClick={() => remove(row.id)}>Delete</DangerButton>
+          </span>,
+        ]}
+      />
+    </div>
+  )
+}
+
+function AuditLogPanel({ rows }) {
+  const [query, setQuery] = useState('')
+  const [action, setAction] = useState('all')
+  const actions = Array.from(new Set(rows.map((row) => row.action))).filter(Boolean)
+  const filteredRows = rows
+    .filter((row) => matchesQuery(row, query, ['actor_email', 'actor_role', 'action', 'entity_type', 'summary']))
+    .filter((row) => action === 'all' || row.action === action)
+
+  return (
+    <div className="grid gap-4">
+      <div className="flex flex-col gap-3 rounded-lg border border-stone-200 bg-white p-5 shadow-sm sm:flex-row">
+        <input value={query} onChange={(event) => setQuery(event.target.value)} className="focus-ring min-h-11 flex-1 rounded-lg border border-stone-300 bg-cafe-cream px-4 py-2 text-sm" placeholder="Search actor, action, entity, summary" />
+        <select value={action} onChange={(event) => setAction(event.target.value)} className="focus-ring min-h-11 rounded-lg border border-stone-300 bg-cafe-cream px-4 py-2 text-sm">
+          <option value="all">All actions</option>
+          {actions.map((item) => <option key={item} value={item}>{item}</option>)}
+        </select>
+      </div>
+      <DataTable
+        title="Audit log"
+        rows={filteredRows}
+        headers={['Date', 'Actor', 'Role', 'Action', 'Entity', 'Summary']}
+        render={(row) => [
+          formatDateTime(row.created_at),
+          row.actor_email || '-',
+          row.actor_role || '-',
+          row.action,
+          row.entity_type,
+          row.summary || '-',
+        ]}
+      />
+    </div>
+  )
+}
+
+function PaymentsPanel({ rows, orders, refresh, business }) {
   const [form, setForm] = useState({
     order_id: '',
     customer_name: '',
@@ -927,7 +1119,7 @@ function PaymentsPanel({ rows, orders, refresh }) {
   const pendingTotal = rows.filter((row) => row.payment_status === 'Pending').reduce((sum, row) => sum + Number(row.amount || 0), 0)
     + orders
       .filter((order) => !paidOrderIds.has(order.id) && !paymentOrderIds.has(order.id) && order.payment_status !== 'Paid' && order.status !== 'cancelled')
-      .reduce((sum, order) => sum + Number(order.subtotal || 0), 0)
+      .reduce((sum, order) => sum + totalFromOrder(order), 0)
   const methodSummary = paymentMethodSummary(rows)
 
   const change = (event) => {
@@ -938,7 +1130,7 @@ function PaymentsPanel({ rows, orders, refresh }) {
         ...current,
         order_id: value,
         customer_name: order?.customer_name || current.customer_name,
-        amount: order?.subtotal ?? current.amount,
+        amount: order ? totalFromOrder(order) : current.amount,
       }))
       return
     }
@@ -982,7 +1174,7 @@ function PaymentsPanel({ rows, orders, refresh }) {
               <option value="">No linked order</option>
               {orders.map((order) => (
                 <option key={order.id} value={order.id}>
-                  {order.customer_name} - {formatCurrency(order.subtotal)} - {order.id.slice(0, 8)}
+                  {order.customer_name} - {formatCurrency(totalFromOrder(order))} - {order.id.slice(0, 8)}
                 </option>
               ))}
             </select>
@@ -1041,7 +1233,7 @@ function PaymentsPanel({ rows, orders, refresh }) {
           payment.transaction_reference || '-',
           <StatusSelect key={`${payment.id}-status`} value={payment.payment_status} options={paymentStatuses} onChange={(value) => updateStatus(payment, value)} />,
           <span key={payment.id} className="inline-flex flex-wrap gap-3">
-            {payment.payment_status === 'Paid' ? <button type="button" onClick={() => printReceipt(payment, orders.find((order) => order.id === payment.order_id))} className="inline-flex items-center gap-1 font-bold text-cafe-copper"><Printer size={14} aria-hidden="true" /> Receipt</button> : null}
+            {payment.payment_status === 'Paid' ? <button type="button" onClick={() => printReceipt(payment, orders.find((order) => order.id === payment.order_id), business)} className="inline-flex items-center gap-1 font-bold text-cafe-copper"><Printer size={14} aria-hidden="true" /> Receipt</button> : null}
             <DangerButton onClick={async () => { if (!window.confirm('Delete this payment record?')) return; await deletePaymentRecord(payment.id); refresh() }}>Delete</DangerButton>
           </span>,
         ]}
@@ -1055,6 +1247,14 @@ function ReportsPanel({ dataset }) {
   const report = useMemo(() => buildReport(dataset, range), [dataset, range])
   const methodSummary = paymentMethodSummary(report.rows.payments || [])
   const actionPayments = (report.rows.payments || []).filter((payment) => ['Pending', 'Failed'].includes(payment.payment_status))
+  const exportPdf = async () => {
+    exportReportToPdf(report)
+    await logAuditEvent({ action: 'report.export_pdf', entityType: 'report', summary: `${report.title} exported to PDF.`, metadata: { range } })
+  }
+  const exportExcel = async () => {
+    exportReportToExcel(report)
+    await logAuditEvent({ action: 'report.export_csv', entityType: 'report', summary: `${report.title} exported to CSV.`, metadata: { range } })
+  }
 
   return (
     <div className="grid gap-6">
@@ -1069,8 +1269,8 @@ function ReportsPanel({ dataset }) {
               {item}
             </button>
           ))}
-          <button onClick={() => exportReportToPdf(report)} className="rounded-full bg-cafe-amber px-4 py-2 text-sm font-bold text-cafe-ink">PDF</button>
-          <button onClick={() => exportReportToExcel(report)} className="rounded-full bg-cafe-forest px-4 py-2 text-sm font-bold text-white">Excel CSV</button>
+          <button onClick={exportPdf} className="rounded-full bg-cafe-amber px-4 py-2 text-sm font-bold text-cafe-ink">PDF</button>
+          <button onClick={exportExcel} className="rounded-full bg-cafe-forest px-4 py-2 text-sm font-bold text-white">Excel CSV</button>
         </div>
       </div>
       <Overview dataset={report.rows} />
@@ -1108,16 +1308,25 @@ function ReportsPanel({ dataset }) {
 
 function AdminDashboard({ user, onLogout }) {
   const [activeTab, setActiveTab] = useState('overview')
-  const [dataset, setDataset] = useState({ reservations: [], messages: [], orders: [], payments: [] })
+  const [dataset, setDataset] = useState({ reservations: [], messages: [], orders: [], payments: [], reviews: [], auditLogs: [], business: defaultBusinessSettings })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
+  const allowedTabs = tabs.filter((tab) => canAccessModule(user, tab.id))
 
   const refresh = async () => {
     setLoading(true)
     setError('')
     try {
-      const [reservations, messages, orders, payments] = await Promise.all([fetchReservations(), fetchContactMessages(), fetchOrders(), fetchPayments()])
-      setDataset({ reservations, messages, orders, payments })
+      const [reservations, messages, orders, payments, reviews, auditLogs, business] = await Promise.all([
+        fetchReservations(),
+        fetchContactMessages(),
+        fetchOrders(),
+        fetchPayments(),
+        fetchAdminReviews(),
+        canAccessModule(user, 'audit') ? fetchAuditLogs() : Promise.resolve([]),
+        fetchBusinessSettings(),
+      ])
+      setDataset({ reservations, messages, orders, payments, reviews, auditLogs, business })
     } catch (fetchError) {
       setError(fetchError.message)
     } finally {
@@ -1141,8 +1350,9 @@ function AdminDashboard({ user, onLogout }) {
       <aside className="fixed inset-y-0 left-0 hidden w-72 border-r border-stone-200 bg-white p-5 lg:block">
         <div className="font-display text-2xl">Amber & Oak Admin</div>
         <p className="mt-2 text-sm text-stone-600">{user.email}</p>
+        <p className="mt-1 text-xs font-bold uppercase tracking-[0.14em] text-cafe-copper">{getUserRole(user) || 'staff'}</p>
         <nav className="mt-8 grid gap-2">
-          {tabs.map((tab) => {
+          {allowedTabs.map((tab) => {
             const Icon = tab.icon
             return (
               <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`flex items-center gap-3 rounded-lg px-4 py-3 text-left text-sm font-bold ${activeTab === tab.id ? 'bg-cafe-ink text-white' : 'hover:bg-cafe-cream'}`}>
@@ -1161,8 +1371,9 @@ function AdminDashboard({ user, onLogout }) {
       <main className="lg:pl-72">
         <div className="border-b border-stone-200 bg-white p-5 lg:hidden">
           <div className="font-display text-2xl">Amber & Oak Admin</div>
+          <p className="mt-1 text-xs font-bold uppercase tracking-[0.14em] text-cafe-copper">{getUserRole(user) || 'staff'}</p>
           <div className="mt-4 grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {tabs.map((tab) => {
+            {allowedTabs.map((tab) => {
               const Icon = tab.icon
               return (
                 <button
@@ -1190,11 +1401,13 @@ function AdminDashboard({ user, onLogout }) {
           {!loading && !error && activeTab === 'reservations' ? <ReservationsPanel rows={dataset.reservations} refresh={refresh} /> : null}
           {!loading && !error && activeTab === 'messages' ? <MessagesPanel rows={dataset.messages} refresh={refresh} /> : null}
           {!loading && !error && activeTab === 'menu' ? <MenuCrudPanel /> : null}
+          {!loading && !error && activeTab === 'reviews' ? <ReviewsPanel rows={dataset.reviews} refresh={refresh} /> : null}
           {!loading && !error && activeTab === 'gallery' ? <GalleryPanel /> : null}
           {!loading && !error && activeTab === 'promotions' ? <PromotionsPanel /> : null}
           {!loading && !error && activeTab === 'orders' ? <OrdersPanel rows={dataset.orders} payments={dataset.payments} refresh={refresh} /> : null}
-          {!loading && !error && activeTab === 'payments' ? <PaymentsPanel rows={dataset.payments} orders={dataset.orders} refresh={refresh} /> : null}
+          {!loading && !error && activeTab === 'payments' ? <PaymentsPanel rows={dataset.payments} orders={dataset.orders} refresh={refresh} business={dataset.business} /> : null}
           {!loading && !error && activeTab === 'reports' ? <ReportsPanel dataset={dataset} /> : null}
+          {!loading && !error && activeTab === 'audit' ? <AuditLogPanel rows={dataset.auditLogs} /> : null}
         </div>
       </main>
     </div>
@@ -1222,7 +1435,7 @@ function AdminApp() {
     }
 
     getSessionUser()
-      .then((sessionUser) => setUser(isAdminUser(sessionUser) ? sessionUser : null))
+      .then((sessionUser) => setUser(isStaffUser(sessionUser) ? sessionUser : null))
       .finally(() => setChecking(false))
   }, [])
 

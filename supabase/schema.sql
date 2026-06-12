@@ -52,9 +52,47 @@ create table if not exists public.orders (
   status text not null default 'pending' check (status in ('pending','confirmed','preparing','ready','completed','cancelled')),
   payment_status text not null default 'Pending' check (payment_status in ('Pending','Paid','Failed','Refunded','Cancelled')),
   subtotal numeric(10,2) not null default 0 check (subtotal >= 0),
+  service_charge_amount numeric(10,2) not null default 0 check (service_charge_amount >= 0),
+  tax_amount numeric(10,2) not null default 0 check (tax_amount >= 0),
+  total_amount numeric(10,2) not null default 0 check (total_amount >= 0),
   notes text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
+);
+
+create table if not exists public.reviews (
+  id uuid primary key default gen_random_uuid(),
+  customer_name text not null,
+  rating integer not null check (rating between 1 and 5),
+  comment text not null,
+  menu_item_name text,
+  visited_date date,
+  status text not null default 'pending' check (status in ('pending','approved','hidden')),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.audit_logs (
+  id uuid primary key default gen_random_uuid(),
+  actor_id uuid,
+  actor_email text,
+  actor_role text,
+  action text not null,
+  entity_type text not null,
+  entity_id text,
+  summary text,
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.payment_gateway_events (
+  id uuid primary key default gen_random_uuid(),
+  provider text not null,
+  mode text not null default 'placeholder',
+  order_id uuid references public.orders(id) on delete set null,
+  status text not null default 'not_configured',
+  payload jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
 );
 
 create table if not exists public.order_items (
@@ -145,6 +183,9 @@ create trigger set_gallery_items_updated_at before update on public.gallery_item
 drop trigger if exists set_promotions_updated_at on public.promotions;
 create trigger set_promotions_updated_at before update on public.promotions for each row execute function public.set_updated_at();
 
+drop trigger if exists set_reviews_updated_at on public.reviews;
+create trigger set_reviews_updated_at before update on public.reviews for each row execute function public.set_updated_at();
+
 create index if not exists menu_items_display_order_idx on public.menu_items(display_order, name);
 create index if not exists reservations_date_idx on public.reservations(reservation_date, reservation_time);
 create index if not exists reservations_status_idx on public.reservations(status);
@@ -158,6 +199,9 @@ create index if not exists payment_records_status_idx on public.payment_records(
 create index if not exists payment_records_method_idx on public.payment_records(payment_method, payment_date desc);
 create index if not exists gallery_items_public_idx on public.gallery_items(is_published, display_order);
 create index if not exists promotions_active_idx on public.promotions(is_active, display_order);
+create index if not exists reviews_public_idx on public.reviews(status, created_at desc);
+create index if not exists audit_logs_created_idx on public.audit_logs(created_at desc);
+create index if not exists audit_logs_entity_idx on public.audit_logs(entity_type, entity_id);
 
 alter table public.menu_items enable row level security;
 alter table public.reservations enable row level security;
@@ -168,6 +212,9 @@ alter table public.payment_records enable row level security;
 alter table public.business_settings enable row level security;
 alter table public.gallery_items enable row level security;
 alter table public.promotions enable row level security;
+alter table public.reviews enable row level security;
+alter table public.audit_logs enable row level security;
+alter table public.payment_gateway_events enable row level security;
 
 create or replace function public.is_admin()
 returns boolean
@@ -175,6 +222,30 @@ language sql
 stable
 as $$
   select coalesce((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin', false);
+$$;
+
+create or replace function public.staff_role()
+returns text
+language sql
+stable
+as $$
+  select coalesce(auth.jwt() -> 'app_metadata' ->> 'role', '');
+$$;
+
+create or replace function public.is_staff()
+returns boolean
+language sql
+stable
+as $$
+  select public.staff_role() in ('admin', 'manager', 'staff');
+$$;
+
+create or replace function public.is_manager_or_admin()
+returns boolean
+language sql
+stable
+as $$
+  select public.staff_role() in ('admin', 'manager');
 $$;
 
 grant select on public.menu_items to anon, authenticated;
@@ -194,6 +265,10 @@ grant select on public.promotions to anon, authenticated;
 grant insert, update, delete on public.business_settings to authenticated;
 grant insert, update, delete on public.gallery_items to authenticated;
 grant insert, update, delete on public.promotions to authenticated;
+grant select, insert on public.reviews to anon, authenticated;
+grant select, update, delete on public.reviews to authenticated;
+grant select, insert on public.audit_logs to authenticated;
+grant select, insert on public.payment_gateway_events to authenticated;
 
 create policy "Public can view available menu items" on public.menu_items
   for select to anon, authenticated
@@ -201,8 +276,8 @@ create policy "Public can view available menu items" on public.menu_items
 
 create policy "Admins manage menu items" on public.menu_items
   for all to authenticated
-  using (public.is_admin())
-  with check (public.is_admin());
+  using (public.is_manager_or_admin())
+  with check (public.is_manager_or_admin());
 
 create policy "Public can create reservations" on public.reservations
   for insert to anon, authenticated
@@ -210,8 +285,8 @@ create policy "Public can create reservations" on public.reservations
 
 create policy "Admins manage reservations" on public.reservations
   for all to authenticated
-  using (public.is_admin())
-  with check (public.is_admin());
+  using (public.is_staff())
+  with check (public.is_staff());
 
 create policy "Public can create contact messages" on public.contact_messages
   for insert to anon, authenticated
@@ -219,8 +294,8 @@ create policy "Public can create contact messages" on public.contact_messages
 
 create policy "Admins manage contact messages" on public.contact_messages
   for all to authenticated
-  using (public.is_admin())
-  with check (public.is_admin());
+  using (public.is_manager_or_admin())
+  with check (public.is_manager_or_admin());
 
 create policy "Public can create orders" on public.orders
   for insert to anon, authenticated
@@ -228,8 +303,8 @@ create policy "Public can create orders" on public.orders
 
 create policy "Admins manage orders" on public.orders
   for all to authenticated
-  using (public.is_admin())
-  with check (public.is_admin());
+  using (public.is_staff())
+  with check (public.is_staff());
 
 create policy "Public can create order items" on public.order_items
   for insert to anon, authenticated
@@ -237,13 +312,13 @@ create policy "Public can create order items" on public.order_items
 
 create policy "Admins manage order items" on public.order_items
   for all to authenticated
-  using (public.is_admin())
-  with check (public.is_admin());
+  using (public.is_staff())
+  with check (public.is_staff());
 
 create policy "Admins manage payment records" on public.payment_records
   for all to authenticated
-  using (public.is_admin())
-  with check (public.is_admin());
+  using (public.is_staff())
+  with check (public.is_staff());
 
 create policy "Public can view business settings" on public.business_settings
   for select to anon, authenticated
@@ -251,8 +326,8 @@ create policy "Public can view business settings" on public.business_settings
 
 create policy "Admins manage business settings" on public.business_settings
   for all to authenticated
-  using (public.is_admin())
-  with check (public.is_admin());
+  using (public.is_manager_or_admin())
+  with check (public.is_manager_or_admin());
 
 create policy "Public can view published gallery items" on public.gallery_items
   for select to anon, authenticated
@@ -260,8 +335,8 @@ create policy "Public can view published gallery items" on public.gallery_items
 
 create policy "Admins manage gallery items" on public.gallery_items
   for all to authenticated
-  using (public.is_admin())
-  with check (public.is_admin());
+  using (public.is_manager_or_admin())
+  with check (public.is_manager_or_admin());
 
 create policy "Public can view active promotions" on public.promotions
   for select to anon, authenticated
@@ -269,8 +344,37 @@ create policy "Public can view active promotions" on public.promotions
 
 create policy "Admins manage promotions" on public.promotions
   for all to authenticated
-  using (public.is_admin())
-  with check (public.is_admin());
+  using (public.is_manager_or_admin())
+  with check (public.is_manager_or_admin());
+
+create policy "Public can create pending reviews" on public.reviews
+  for insert to anon, authenticated
+  with check (status = 'pending');
+
+create policy "Public can view approved reviews" on public.reviews
+  for select to anon, authenticated
+  using (status = 'approved' or public.is_manager_or_admin());
+
+create policy "Managers manage reviews" on public.reviews
+  for all to authenticated
+  using (public.is_manager_or_admin())
+  with check (public.is_manager_or_admin());
+
+create policy "Staff can create audit logs" on public.audit_logs
+  for insert to authenticated
+  with check (public.is_staff());
+
+create policy "Admins can view audit logs" on public.audit_logs
+  for select to authenticated
+  using (public.is_admin());
+
+create policy "Staff can create payment gateway events" on public.payment_gateway_events
+  for insert to authenticated
+  with check (public.is_staff());
+
+create policy "Staff can view payment gateway events" on public.payment_gateway_events
+  for select to authenticated
+  using (public.is_staff());
 
 insert into storage.buckets (id, name, public)
 values ('restaurant-assets', 'restaurant-assets', true)

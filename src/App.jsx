@@ -10,6 +10,7 @@ import Navbar from './components/Navbar.jsx'
 import Order from './components/Order.jsx'
 import Promotion from './components/Promotion.jsx'
 import Reservation from './components/Reservation.jsx'
+import Reviews from './components/Reviews.jsx'
 import WhatsAppButton from './components/WhatsAppButton.jsx'
 import { BusinessSettingsProvider } from './context/BusinessSettingsContext.jsx'
 import { useBusinessSettings } from './context/useBusinessSettings.js'
@@ -28,6 +29,7 @@ function PublicSite() {
         <Menu />
         <Order />
         <Gallery />
+        <Reviews />
         <Promotion />
         <Reservation />
         <Location />
