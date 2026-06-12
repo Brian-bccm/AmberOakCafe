@@ -13,6 +13,17 @@ function orderRows(report) {
   }))
 }
 
+function paymentRows(report) {
+  return (report.rows.payments || []).map((payment) => ({
+    Date: formatDateTime(payment.payment_date),
+    Customer: payment.customer_name,
+    Method: payment.payment_method,
+    Status: payment.payment_status,
+    Reference: payment.transaction_reference || '-',
+    Amount: Number(payment.amount || 0),
+  }))
+}
+
 export function exportReportToPdf(report) {
   const doc = new jsPDF()
   doc.setFontSize(18)
@@ -24,8 +35,8 @@ export function exportReportToPdf(report) {
 
   autoTable(doc, {
     startY: 56,
-    head: [['Date', 'Customer', 'Phone', 'Status', 'Payment', 'Revenue']],
-    body: orderRows(report).map((row) => [row.Date, row.Customer, row.Phone, row.Status, row.Payment, formatCurrency(row.Revenue)]),
+    head: [['Date', 'Customer', 'Method', 'Status', 'Reference', 'Amount']],
+    body: paymentRows(report).map((row) => [row.Date, row.Customer, row.Method, row.Status, row.Reference, formatCurrency(row.Amount)]),
   })
 
   doc.save(`amber-oak-${report.range}-report.pdf`)
@@ -44,6 +55,8 @@ export function exportReportToExcel(report) {
     { Section: 'Summary', Metric: 'Total orders', Value: report.analytics.totalOrders },
     { Section: 'Summary', Metric: 'Total customers', Value: report.analytics.totalCustomers },
     { Section: 'Summary', Metric: 'Reservations', Value: report.analytics.reservationsTotal },
+    { Section: 'Summary', Metric: 'Pending payment amount', Value: report.analytics.pendingAmount },
+    ...paymentRows(report).map((row) => ({ Section: 'Payments', Metric: `${row.Customer} (${row.Method} / ${row.Status})`, Value: row.Amount })),
     ...orderRows(report).map((row) => ({ Section: 'Orders', Metric: `${row.Customer} (${row.Payment})`, Value: row.Revenue })),
     ...report.analytics.topSellingItems.map((item) => ({ Section: 'Top Items', Metric: item.name, Value: item.quantity })),
   ]

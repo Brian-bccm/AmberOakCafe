@@ -50,7 +50,7 @@ create table if not exists public.orders (
   email text,
   order_type text not null default 'pickup' check (order_type in ('pickup','delivery','dine-in')),
   status text not null default 'pending' check (status in ('pending','confirmed','preparing','ready','completed','cancelled')),
-  payment_status text not null default 'unpaid' check (payment_status in ('unpaid','paid','refunded')),
+  payment_status text not null default 'Pending' check (payment_status in ('Pending','Paid','Failed','Refunded','Cancelled')),
   subtotal numeric(10,2) not null default 0 check (subtotal >= 0),
   notes text,
   created_at timestamptz not null default now(),
@@ -67,6 +67,19 @@ create table if not exists public.order_items (
   customizations jsonb not null default '{}'::jsonb,
   notes text,
   line_total numeric(10,2) generated always as (unit_price * quantity) stored,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists public.payment_records (
+  id uuid primary key default gen_random_uuid(),
+  order_id uuid references public.orders(id) on delete set null,
+  customer_name text not null,
+  amount numeric(10,2) not null check (amount >= 0),
+  payment_method text not null default 'Cash' check (payment_method in ('Cash','Credit/Debit Card','Online Bank Transfer','TNG eWallet','GrabPay','DuitNow QR','Other')),
+  payment_status text not null default 'Pending' check (payment_status in ('Pending','Paid','Failed','Refunded','Cancelled')),
+  transaction_reference text,
+  payment_date timestamptz not null default now(),
+  notes text,
   created_at timestamptz not null default now()
 );
 
@@ -100,12 +113,16 @@ create index if not exists orders_status_idx on public.orders(status, created_at
 create index if not exists orders_payment_status_idx on public.orders(payment_status, created_at desc);
 create index if not exists order_items_order_id_idx on public.order_items(order_id);
 create index if not exists order_items_menu_item_id_idx on public.order_items(menu_item_id);
+create index if not exists payment_records_order_id_idx on public.payment_records(order_id);
+create index if not exists payment_records_status_idx on public.payment_records(payment_status, payment_date desc);
+create index if not exists payment_records_method_idx on public.payment_records(payment_method, payment_date desc);
 
 alter table public.menu_items enable row level security;
 alter table public.reservations enable row level security;
 alter table public.contact_messages enable row level security;
 alter table public.orders enable row level security;
 alter table public.order_items enable row level security;
+alter table public.payment_records enable row level security;
 
 create or replace function public.is_admin()
 returns boolean
@@ -125,6 +142,7 @@ grant select, update, delete on public.reservations to authenticated;
 grant select, update, delete on public.contact_messages to authenticated;
 grant select, update, delete on public.orders to authenticated;
 grant select, update, delete on public.order_items to authenticated;
+grant select, insert, update, delete on public.payment_records to authenticated;
 
 create policy "Public can view available menu items" on public.menu_items
   for select to anon, authenticated
@@ -167,6 +185,11 @@ create policy "Public can create order items" on public.order_items
   with check (true);
 
 create policy "Admins manage order items" on public.order_items
+  for all to authenticated
+  using (public.is_admin())
+  with check (public.is_admin());
+
+create policy "Admins manage payment records" on public.payment_records
   for all to authenticated
   using (public.is_admin())
   with check (public.is_admin());

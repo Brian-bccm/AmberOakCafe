@@ -30,6 +30,7 @@ Amber & Oak Cafe is a React + Supabase + Netlify project built as a realistic fr
 - Menu loads from Supabase and falls back to clearly demo seed content when Supabase is not configured.
 - Admin login uses Supabase Auth and `app_metadata.role = "admin"`.
 - Admin dashboard includes overview metrics, recent activity, reservations, messages, menu CRUD, orders, reports, PDF export, and CSV export.
+- Payment Management tracks manual cash/card/bank/eWallet/QR payments, links payments to orders, and generates printable receipts.
 
 ## Environment Variables
 
@@ -81,6 +82,7 @@ Core tables:
 - `contact_messages`: customer enquiries.
 - `orders`: order header, subtotal, order status, payment status, and notes.
 - `order_items`: order lines, quantity, item price, customizations, and item notes.
+- `payment_records`: manual/admin payment tracking linked to orders where applicable.
 
 Security:
 
@@ -117,7 +119,10 @@ Recommended checks:
 8. Add, edit, hide, and delete a test menu item.
 9. Confirm the public menu updates after admin menu changes.
 10. Update order status and payment status.
-11. Export daily, weekly, monthly, and yearly reports.
+11. Add a manual payment record and link it to an order.
+12. Confirm completed orders have a `Paid` payment or confirm cash payment during completion.
+13. Print a receipt from a paid payment/order.
+14. Export daily, weekly, monthly, and yearly reports.
 
 ## Deployment
 
@@ -159,6 +164,8 @@ npm run build
 - Contact message management: complete.
 - Menu CRUD: complete.
 - Order and payment status management: complete.
+- Manual Payment Management: complete.
+- Printable paid-order receipts: complete.
 - Sales reports and exports: complete.
 - RLS and public/private data separation: complete.
 - Netlify production deployment: complete.

@@ -1,4 +1,4 @@
-import { BarChart3, LogOut, MessageSquare, ReceiptText, Settings, Utensils, Users } from 'lucide-react'
+import { BarChart3, CreditCard, LogOut, MessageSquare, Printer, ReceiptText, Settings, Utensils, Users } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { isSupabaseConfigured } from '../../lib/supabaseClient.js'
@@ -6,9 +6,14 @@ import {
   deleteContactMessage,
   deleteOrder,
   deleteReservation,
+  confirmCashPaymentForOrder,
+  createPaymentRecord,
+  deletePaymentRecord,
   fetchContactMessages,
   fetchOrders,
+  fetchPayments,
   fetchReservations,
+  updatePaymentRecord,
   updateMessageStatus,
   updateOrderPaymentStatus,
   updateOrderStatus,
@@ -26,8 +31,12 @@ const tabs = [
   { id: 'messages', label: 'Messages', icon: MessageSquare },
   { id: 'menu', label: 'Menu CRUD', icon: Utensils },
   { id: 'orders', label: 'Orders', icon: ReceiptText },
+  { id: 'payments', label: 'Payments', icon: CreditCard },
   { id: 'reports', label: 'Reports', icon: Settings },
 ]
+
+const paymentMethods = ['Cash', 'Credit/Debit Card', 'Online Bank Transfer', 'TNG eWallet', 'GrabPay', 'DuitNow QR', 'Other']
+const paymentStatuses = ['Pending', 'Paid', 'Failed', 'Refunded', 'Cancelled']
 
 const emptyMenuForm = {
   name: '',
@@ -71,6 +80,49 @@ function DangerButton({ children, onClick }) {
       {children}
     </button>
   )
+}
+
+function printReceipt(payment, order) {
+  const receipt = window.open('', '_blank', 'width=420,height=640')
+  if (!receipt) return
+  const orderNumber = order?.id ? order.id.slice(0, 8).toUpperCase() : payment.order_id?.slice(0, 8).toUpperCase() || 'MANUAL'
+  receipt.document.write(`
+    <html>
+      <head>
+        <title>Receipt ${orderNumber}</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 24px; color: #18211c; }
+          h1 { font-size: 24px; margin: 0 0 4px; }
+          .muted { color: #666; font-size: 13px; }
+          .row { display: flex; justify-content: space-between; border-bottom: 1px solid #eee; padding: 10px 0; gap: 16px; }
+          .total { font-size: 22px; font-weight: 700; }
+          @media print { button { display: none; } }
+        </style>
+      </head>
+      <body>
+        <h1>Amber & Oak Cafe</h1>
+        <p class="muted">Payment Receipt</p>
+        <div class="row"><strong>Order No.</strong><span>${orderNumber}</span></div>
+        <div class="row"><strong>Customer</strong><span>${payment.customer_name}</span></div>
+        <div class="row"><strong>Payment Method</strong><span>${payment.payment_method}</span></div>
+        <div class="row"><strong>Status</strong><span>${payment.payment_status}</span></div>
+        <div class="row"><strong>Date</strong><span>${formatDateTime(payment.payment_date)}</span></div>
+        <div class="row"><strong>Reference</strong><span>${payment.transaction_reference || '-'}</span></div>
+        <div class="row total"><strong>Amount</strong><span>${formatCurrency(payment.amount)}</span></div>
+        <p class="muted">This receipt was generated from the admin payment tracking system.</p>
+        <button onclick="window.print()">Print Receipt</button>
+      </body>
+    </html>
+  `)
+  receipt.document.close()
+}
+
+function paymentMethodSummary(payments) {
+  const summary = new Map()
+  for (const payment of payments.filter((item) => item.payment_status === 'Paid')) {
+    summary.set(payment.payment_method, (summary.get(payment.payment_method) || 0) + Number(payment.amount || 0))
+  }
+  return Array.from(summary, ([method, amount]) => ({ method, amount })).sort((a, b) => b.amount - a.amount)
 }
 
 function AdminLogin({ onLogin }) {
@@ -133,6 +185,7 @@ function Overview({ dataset }) {
         ...dataset.reservations.map((item) => ({ id: `reservation-${item.id}`, type: 'Reservation', title: item.customer_name, detail: `${item.guests} guests on ${formatDate(item.reservation_date)}`, created_at: item.created_at })),
         ...dataset.messages.map((item) => ({ id: `message-${item.id}`, type: 'Message', title: item.name, detail: item.message, created_at: item.created_at })),
         ...dataset.orders.map((item) => ({ id: `order-${item.id}`, type: 'Order', title: item.customer_name, detail: `${formatCurrency(item.subtotal)} - ${item.status}`, created_at: item.created_at })),
+        ...dataset.payments.map((item) => ({ id: `payment-${item.id}`, type: 'Payment', title: item.customer_name, detail: `${formatCurrency(item.amount)} - ${item.payment_status}`, created_at: item.payment_date || item.created_at })),
       ]
         .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
         .slice(0, 6),
@@ -145,7 +198,7 @@ function Overview({ dataset }) {
         <StatCard label="Total revenue" value={formatCurrency(analytics.totalRevenue)} />
         <StatCard label="Monthly revenue" value={formatCurrency(analytics.monthlyRevenueAmount)} />
         <StatCard label="Total orders" value={analytics.totalOrders} />
-        <StatCard label="Total customers" value={analytics.totalCustomers} />
+        <StatCard label="Pending payments" value={formatCurrency(analytics.pendingAmount)} />
       </div>
       <div className="grid gap-6 xl:grid-cols-[1.3fr_0.7fr]">
         <div className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
@@ -283,15 +336,19 @@ function MessagesPanel({ rows, refresh }) {
   )
 }
 
-function OrdersPanel({ rows, refresh }) {
+function OrdersPanel({ rows, payments = [], refresh }) {
   const [query, setQuery] = useState('')
   const [status, setStatus] = useState('all')
   const filteredRows = rows
     .filter((row) => matchesQuery(row, query, ['customer_name', 'phone', 'email', 'notes']))
     .filter((row) => status === 'all' || row.status === status)
 
-  const update = async (id, status) => {
-    await updateOrderStatus(id, status)
+  const update = async (order, status) => {
+    if (status === 'completed' && order.payment_status !== 'Paid') {
+      if (!window.confirm('This order is not paid yet. Confirm cash payment and complete the order?')) return
+      await confirmCashPaymentForOrder(order)
+    }
+    await updateOrderStatus(order.id, status)
     refresh()
   }
 
@@ -332,10 +389,15 @@ function OrdersPanel({ rows, refresh }) {
           </div>,
           row.notes || '-',
           formatCurrency(row.subtotal),
-          <StatusSelect key={`${row.id}-payment`} value={row.payment_status || 'unpaid'} options={['unpaid', 'paid', 'refunded']} onChange={(value) => updatePayment(row.id, value)} />,
+          <StatusSelect key={`${row.id}-payment`} value={row.payment_status || 'Pending'} options={paymentStatuses} onChange={(value) => updatePayment(row.id, value)} />,
           row.status,
           <span key={row.id} className="inline-flex flex-wrap gap-3">
-            <StatusSelect value={row.status} options={['pending', 'confirmed', 'preparing', 'ready', 'completed', 'cancelled']} onChange={(value) => update(row.id, value)} />
+            <StatusSelect value={row.status} options={['pending', 'confirmed', 'preparing', 'ready', 'completed', 'cancelled']} onChange={(value) => update(row, value)} />
+            {(payments || []).some((payment) => payment.order_id === row.id && payment.payment_status === 'Paid') ? (
+              <button type="button" onClick={() => printReceipt((payments || []).find((payment) => payment.order_id === row.id && payment.payment_status === 'Paid'), row)} className="inline-flex items-center gap-1 font-bold text-cafe-copper">
+                <Printer size={14} aria-hidden="true" /> Receipt
+              </button>
+            ) : null}
             <DangerButton onClick={() => remove(row.id)}>Delete</DangerButton>
           </span>,
         ]}
@@ -499,9 +561,161 @@ function MenuCrudPanel() {
   )
 }
 
+function PaymentsPanel({ rows, orders, refresh }) {
+  const [form, setForm] = useState({
+    order_id: '',
+    customer_name: '',
+    amount: '',
+    payment_method: 'Cash',
+    payment_status: 'Pending',
+    transaction_reference: '',
+    payment_date: new Date().toISOString().slice(0, 16),
+    notes: '',
+  })
+  const [query, setQuery] = useState('')
+  const [status, setStatus] = useState('all')
+  const [method, setMethod] = useState('all')
+  const [date, setDate] = useState('')
+  const [message, setMessage] = useState('')
+  const filteredRows = rows
+    .filter((row) => matchesQuery(row, query, ['customer_name', 'transaction_reference', 'notes', 'order_id']))
+    .filter((row) => status === 'all' || row.payment_status === status)
+    .filter((row) => method === 'all' || row.payment_method === method)
+    .filter((row) => !date || String(row.payment_date || '').slice(0, 10) === date)
+  const paidTotal = rows.filter((row) => row.payment_status === 'Paid').reduce((sum, row) => sum + Number(row.amount || 0), 0)
+  const paidOrderIds = new Set(rows.filter((row) => row.payment_status === 'Paid').map((row) => row.order_id).filter(Boolean))
+  const paymentOrderIds = new Set(rows.map((row) => row.order_id).filter(Boolean))
+  const pendingTotal = rows.filter((row) => row.payment_status === 'Pending').reduce((sum, row) => sum + Number(row.amount || 0), 0)
+    + orders
+      .filter((order) => !paidOrderIds.has(order.id) && !paymentOrderIds.has(order.id) && order.payment_status !== 'Paid' && order.status !== 'cancelled')
+      .reduce((sum, order) => sum + Number(order.subtotal || 0), 0)
+  const methodSummary = paymentMethodSummary(rows)
+
+  const change = (event) => {
+    const { name, value } = event.target
+    if (name === 'order_id') {
+      const order = orders.find((item) => item.id === value)
+      setForm((current) => ({
+        ...current,
+        order_id: value,
+        customer_name: order?.customer_name || current.customer_name,
+        amount: order?.subtotal ?? current.amount,
+      }))
+      return
+    }
+    setForm((current) => ({ ...current, [name]: value }))
+  }
+
+  const submit = async (event) => {
+    event.preventDefault()
+    if (!form.customer_name.trim() || Number(form.amount) <= 0) {
+      setMessage('Please add customer name and a valid amount.')
+      return
+    }
+    try {
+      await createPaymentRecord({ ...form, payment_date: new Date(form.payment_date).toISOString() })
+      setForm({ order_id: '', customer_name: '', amount: '', payment_method: 'Cash', payment_status: 'Pending', transaction_reference: '', payment_date: new Date().toISOString().slice(0, 16), notes: '' })
+      setMessage('Payment record saved.')
+      refresh()
+    } catch (error) {
+      setMessage(error.message)
+    }
+  }
+
+  const updateStatus = async (payment, paymentStatus) => {
+    await updatePaymentRecord(payment.id, { payment_status: paymentStatus })
+    refresh()
+  }
+
+  return (
+    <div className="grid gap-6">
+      <div className="grid gap-4 md:grid-cols-3">
+        <StatCard label="Total paid revenue" value={formatCurrency(paidTotal)} />
+        <StatCard label="Unpaid / pending amount" value={formatCurrency(pendingTotal)} />
+        <StatCard label="Payment records" value={rows.length} />
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-[0.85fr_1.15fr]">
+        <form onSubmit={submit} className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
+          <h2 className="font-display text-2xl">Add manual payment</h2>
+          <div className="mt-5 grid gap-4">
+            <select name="order_id" value={form.order_id} onChange={change} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3">
+              <option value="">No linked order</option>
+              {orders.map((order) => (
+                <option key={order.id} value={order.id}>
+                  {order.customer_name} - {formatCurrency(order.subtotal)} - {order.id.slice(0, 8)}
+                </option>
+              ))}
+            </select>
+            <input name="customer_name" value={form.customer_name} onChange={change} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3" placeholder="Customer name" />
+            <input name="amount" type="number" min="0" step="0.01" value={form.amount} onChange={change} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3" placeholder="Amount" />
+            <select name="payment_method" value={form.payment_method} onChange={change} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3">
+              {paymentMethods.map((item) => <option key={item} value={item}>{item}</option>)}
+            </select>
+            <select name="payment_status" value={form.payment_status} onChange={change} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3">
+              {paymentStatuses.map((item) => <option key={item} value={item}>{item}</option>)}
+            </select>
+            <input name="transaction_reference" value={form.transaction_reference} onChange={change} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3" placeholder="Reference number optional" />
+            <input name="payment_date" type="datetime-local" value={form.payment_date} onChange={change} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3" />
+            <textarea name="notes" value={form.notes} onChange={change} className="focus-ring min-h-24 resize-y rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3" placeholder="Payment notes" />
+          </div>
+          <button className="focus-ring mt-5 rounded-full bg-cafe-ink px-6 py-3 text-sm font-bold text-white">Save Payment</button>
+          {message ? <p className="mt-4 rounded-lg bg-cafe-cream px-4 py-3 text-sm">{message}</p> : null}
+        </form>
+
+        <div className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
+          <h2 className="font-display text-2xl">Revenue by payment method</h2>
+          <div className="mt-5 grid gap-3">
+            {methodSummary.length ? methodSummary.map((item) => (
+              <div key={item.method} className="flex items-center justify-between rounded-lg bg-cafe-cream px-4 py-3">
+                <span className="font-bold">{item.method}</span>
+                <span>{formatCurrency(item.amount)}</span>
+              </div>
+            )) : <p className="text-sm text-stone-600">No paid payment records yet.</p>}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-3 rounded-lg border border-stone-200 bg-white p-5 shadow-sm lg:grid-cols-4">
+        <input value={query} onChange={(event) => setQuery(event.target.value)} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-2 text-sm" placeholder="Search customer, order, reference" />
+        <select value={status} onChange={(event) => setStatus(event.target.value)} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-2 text-sm">
+          <option value="all">All statuses</option>
+          {paymentStatuses.map((item) => <option key={item} value={item}>{item}</option>)}
+        </select>
+        <select value={method} onChange={(event) => setMethod(event.target.value)} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-2 text-sm">
+          <option value="all">All methods</option>
+          {paymentMethods.map((item) => <option key={item} value={item}>{item}</option>)}
+        </select>
+        <input type="date" value={date} onChange={(event) => setDate(event.target.value)} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-2 text-sm" />
+      </div>
+
+      <DataTable
+        title="Payment records"
+        rows={filteredRows}
+        headers={['Date', 'Customer', 'Order', 'Method', 'Amount', 'Reference', 'Status', 'Action']}
+        render={(payment) => [
+          formatDateTime(payment.payment_date),
+          payment.customer_name,
+          payment.order_id ? payment.order_id.slice(0, 8).toUpperCase() : 'Manual',
+          payment.payment_method,
+          formatCurrency(payment.amount),
+          payment.transaction_reference || '-',
+          <StatusSelect key={`${payment.id}-status`} value={payment.payment_status} options={paymentStatuses} onChange={(value) => updateStatus(payment, value)} />,
+          <span key={payment.id} className="inline-flex flex-wrap gap-3">
+            {payment.payment_status === 'Paid' ? <button type="button" onClick={() => printReceipt(payment, orders.find((order) => order.id === payment.order_id))} className="inline-flex items-center gap-1 font-bold text-cafe-copper"><Printer size={14} aria-hidden="true" /> Receipt</button> : null}
+            <DangerButton onClick={async () => { if (!window.confirm('Delete this payment record?')) return; await deletePaymentRecord(payment.id); refresh() }}>Delete</DangerButton>
+          </span>,
+        ]}
+      />
+    </div>
+  )
+}
+
 function ReportsPanel({ dataset }) {
   const [range, setRange] = useState('monthly')
   const report = useMemo(() => buildReport(dataset, range), [dataset, range])
+  const methodSummary = paymentMethodSummary(report.rows.payments || [])
+  const actionPayments = (report.rows.payments || []).filter((payment) => ['Pending', 'Failed'].includes(payment.payment_status))
 
   return (
     <div className="grid gap-6">
@@ -521,14 +735,41 @@ function ReportsPanel({ dataset }) {
         </div>
       </div>
       <Overview dataset={report.rows} />
-      <OrdersPanel rows={report.rows.orders} refresh={() => {}} />
+      <div className="grid gap-6 xl:grid-cols-2">
+        <div className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
+          <h2 className="font-display text-2xl">Revenue by payment method</h2>
+          <div className="mt-5 grid gap-3">
+            {methodSummary.length ? methodSummary.map((item) => (
+              <div key={item.method} className="flex items-center justify-between rounded-lg bg-cafe-cream px-4 py-3">
+                <span className="font-bold">{item.method}</span>
+                <span>{formatCurrency(item.amount)}</span>
+              </div>
+            )) : <p className="text-sm text-stone-600">No paid payment records in this period.</p>}
+          </div>
+        </div>
+        <div className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
+          <h2 className="font-display text-2xl">Failed / pending payments</h2>
+          <div className="mt-5 grid gap-3">
+            {actionPayments.length ? actionPayments.map((payment) => (
+              <div key={payment.id} className="rounded-lg bg-cafe-cream px-4 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <span className="font-bold">{payment.customer_name}</span>
+                  <span>{formatCurrency(payment.amount)}</span>
+                </div>
+                <p className="mt-1 text-sm text-stone-600">{payment.payment_method} - {payment.payment_status} - {payment.transaction_reference || 'No reference'}</p>
+              </div>
+            )) : <p className="text-sm text-stone-600">No failed or pending payments in this period.</p>}
+          </div>
+        </div>
+      </div>
+      <OrdersPanel rows={report.rows.orders} payments={report.rows.payments} refresh={() => {}} />
     </div>
   )
 }
 
 function AdminDashboard({ user, onLogout }) {
   const [activeTab, setActiveTab] = useState('overview')
-  const [dataset, setDataset] = useState({ reservations: [], messages: [], orders: [] })
+  const [dataset, setDataset] = useState({ reservations: [], messages: [], orders: [], payments: [] })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
@@ -536,8 +777,8 @@ function AdminDashboard({ user, onLogout }) {
     setLoading(true)
     setError('')
     try {
-      const [reservations, messages, orders] = await Promise.all([fetchReservations(), fetchContactMessages(), fetchOrders()])
-      setDataset({ reservations, messages, orders })
+      const [reservations, messages, orders, payments] = await Promise.all([fetchReservations(), fetchContactMessages(), fetchOrders(), fetchPayments()])
+      setDataset({ reservations, messages, orders, payments })
     } catch (fetchError) {
       setError(fetchError.message)
     } finally {
@@ -609,7 +850,8 @@ function AdminDashboard({ user, onLogout }) {
           {!loading && !error && activeTab === 'reservations' ? <ReservationsPanel rows={dataset.reservations} refresh={refresh} /> : null}
           {!loading && !error && activeTab === 'messages' ? <MessagesPanel rows={dataset.messages} refresh={refresh} /> : null}
           {!loading && !error && activeTab === 'menu' ? <MenuCrudPanel /> : null}
-          {!loading && !error && activeTab === 'orders' ? <OrdersPanel rows={dataset.orders} refresh={refresh} /> : null}
+          {!loading && !error && activeTab === 'orders' ? <OrdersPanel rows={dataset.orders} payments={dataset.payments} refresh={refresh} /> : null}
+          {!loading && !error && activeTab === 'payments' ? <PaymentsPanel rows={dataset.payments} orders={dataset.orders} refresh={refresh} /> : null}
           {!loading && !error && activeTab === 'reports' ? <ReportsPanel dataset={dataset} /> : null}
         </div>
       </main>

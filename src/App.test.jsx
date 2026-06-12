@@ -39,7 +39,7 @@ describe('Amber & Oak Cafe landing page', () => {
     const form = screen.getByRole('form', { name: /Contact form/i })
     await user.type(within(form).getByLabelText(/Name/i), 'Aina Rahman')
     await user.type(within(form).getByLabelText(/Phone/i), '012-345 6789')
-    await user.type(within(form).getByLabelText(/Message/i), 'I would like to reserve a table for four this Saturday.')
+    await user.type(within(form).getByLabelText(/Message/i), 'I would like to ask about private event catering.')
     await user.click(screen.getByRole('button', { name: /Send Enquiry/i }))
 
     expect(await screen.findByText(/Thanks, Aina/i)).toBeInTheDocument()
@@ -75,13 +75,16 @@ describe('Amber & Oak Cafe landing page', () => {
       messages: [{ phone: '013', status: 'new' }],
       orders: [
         {
+          id: 'order-1',
           phone: '012',
           status: 'completed',
+          payment_status: 'Paid',
           subtotal: 88,
           created_at: '2026-06-01T10:00:00Z',
           order_items: [{ item_name: 'Latte', quantity: 2, line_total: 32 }],
         },
       ],
+      payments: [{ order_id: 'order-1', payment_status: 'Paid', amount: 88, payment_date: '2026-06-01T10:00:00Z' }],
     })
 
     expect(analytics.totalRevenue).toBe(88)
