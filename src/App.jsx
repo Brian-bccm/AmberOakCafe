@@ -11,18 +11,13 @@ import Order from './components/Order.jsx'
 import Promotion from './components/Promotion.jsx'
 import Reservation from './components/Reservation.jsx'
 import WhatsAppButton from './components/WhatsAppButton.jsx'
-import { cafe } from './data/siteContent.js'
+import { BusinessSettingsProvider } from './context/BusinessSettingsContext.jsx'
+import { useBusinessSettings } from './context/useBusinessSettings.js'
 
 const AdminApp = lazy(() => import('./components/admin/AdminApp.jsx'))
 
-function App() {
-  if (window.location.pathname.startsWith('/admin')) {
-    return (
-      <Suspense fallback={<main className="min-h-screen bg-cafe-cream p-8">Loading admin dashboard...</main>}>
-        <AdminApp />
-      </Suspense>
-    )
-  }
+function PublicSite() {
+  const { business } = useBusinessSettings()
 
   return (
     <div className="min-h-screen bg-cafe-cream text-cafe-ink">
@@ -39,8 +34,24 @@ function App() {
         <Contact />
       </main>
       <Footer />
-      <WhatsAppButton href={cafe.whatsappLink} />
+      <WhatsAppButton href={business.whatsappLink} />
     </div>
+  )
+}
+
+function App() {
+  if (window.location.pathname.startsWith('/admin')) {
+    return (
+      <Suspense fallback={<main className="min-h-screen bg-cafe-cream p-8">Loading admin dashboard...</main>}>
+        <AdminApp />
+      </Suspense>
+    )
+  }
+
+  return (
+    <BusinessSettingsProvider>
+      <PublicSite />
+    </BusinessSettingsProvider>
   )
 }
 

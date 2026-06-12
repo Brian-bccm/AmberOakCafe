@@ -1,4 +1,4 @@
-import { BarChart3, CreditCard, LogOut, MessageSquare, Printer, ReceiptText, Settings, Utensils, Users } from 'lucide-react'
+import { BarChart3, CreditCard, Image, LogOut, Megaphone, MessageSquare, Printer, ReceiptText, Settings, Store, Utensils, Users } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { isSupabaseConfigured } from '../../lib/supabaseClient.js'
@@ -20,6 +20,20 @@ import {
   updateReservationStatus,
 } from '../../services/adminService.js'
 import { getSessionUser, isAdminUser, signInAdmin, signOutAdmin } from '../../services/authService.js'
+import {
+  createGalleryItem,
+  createPromotion,
+  defaultBusinessSettings,
+  deleteGalleryItem,
+  deletePromotion,
+  fetchAdminGalleryItems,
+  fetchAdminPromotions,
+  fetchBusinessSettings,
+  saveBusinessSettings,
+  updateGalleryItem,
+  updatePromotion,
+  uploadRestaurantAsset,
+} from '../../services/contentService.js'
 import { createMenuItem, deleteMenuItem, fetchAdminMenuItems, stringifyCustomizationOptions, updateMenuItem } from '../../services/menuService.js'
 import { buildReport, calculateAnalytics } from '../../services/reportService.js'
 import { exportReportToExcel, exportReportToPdf } from '../../utils/exportReports.js'
@@ -27,9 +41,12 @@ import { formatCurrency, formatDate, formatDateTime } from '../../utils/formatte
 
 const tabs = [
   { id: 'overview', label: 'Overview', icon: BarChart3 },
+  { id: 'business', label: 'Business Settings', icon: Store },
   { id: 'reservations', label: 'Reservations', icon: Users },
   { id: 'messages', label: 'Messages', icon: MessageSquare },
   { id: 'menu', label: 'Menu CRUD', icon: Utensils },
+  { id: 'gallery', label: 'Gallery', icon: Image },
+  { id: 'promotions', label: 'Promotions', icon: Megaphone },
   { id: 'orders', label: 'Orders', icon: ReceiptText },
   { id: 'payments', label: 'Payments', icon: CreditCard },
   { id: 'reports', label: 'Reports', icon: Settings },
@@ -48,6 +65,24 @@ const emptyMenuForm = {
   customization_options: '',
   is_available: true,
   display_order: 0,
+}
+
+const emptyGalleryForm = {
+  title: '',
+  image_url: '',
+  alt_text: '',
+  display_order: 0,
+  is_published: true,
+}
+
+const emptyPromotionForm = {
+  title: '',
+  description: '',
+  offer_text: '',
+  image_url: '',
+  whatsapp_message: defaultBusinessSettings.promotionWhatsAppMessage,
+  display_order: 0,
+  is_active: true,
 }
 
 function matchesQuery(row, query, fields) {
@@ -79,6 +114,39 @@ function DangerButton({ children, onClick }) {
     <button type="button" onClick={onClick} className="font-bold text-red-700">
       {children}
     </button>
+  )
+}
+
+function ImageUploadField({ label, value, onUploaded, folder }) {
+  const [uploading, setUploading] = useState(false)
+  const [message, setMessage] = useState('')
+
+  const upload = async (event) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    setUploading(true)
+    setMessage('')
+    try {
+      const url = await uploadRestaurantAsset(file, folder)
+      onUploaded(url)
+      setMessage('Image uploaded.')
+    } catch (error) {
+      setMessage(error.message || 'Image upload failed. Check Supabase Storage bucket and policies.')
+    } finally {
+      setUploading(false)
+      event.target.value = ''
+    }
+  }
+
+  return (
+    <label className="grid gap-2 text-sm font-bold text-cafe-ink">
+      {label}
+      <input type="file" accept="image/*" onChange={upload} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3 font-normal" />
+      {value ? <img src={value} alt={`${label} preview`} className="h-28 w-40 rounded-lg border border-stone-200 object-cover" /> : null}
+      {uploading ? <span className="text-xs font-normal text-stone-500">Uploading...</span> : null}
+      {message ? <span className="text-xs font-normal text-stone-500">{message}</span> : null}
+    </label>
   )
 }
 
@@ -454,6 +522,276 @@ function DataTable({ title, rows, headers, render }) {
   )
 }
 
+function BusinessSettingsPanel() {
+  const [form, setForm] = useState(defaultBusinessSettings)
+  const [message, setMessage] = useState('')
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetchBusinessSettings()
+      .then((settings) => setForm({ ...defaultBusinessSettings, ...settings }))
+      .catch((error) => setMessage(error.message))
+      .finally(() => setLoading(false))
+  }, [])
+
+  const change = (event) => {
+    const { name, value, type, checked } = event.target
+    setForm((current) => ({ ...current, [name]: type === 'checkbox' ? checked : value }))
+  }
+
+  const submit = async (event) => {
+    event.preventDefault()
+    setMessage('')
+    try {
+      const saved = await saveBusinessSettings(form)
+      setForm({ ...defaultBusinessSettings, ...saved })
+      setMessage('Business settings saved. Refresh the public website to see the changes.')
+    } catch (error) {
+      setMessage(error.message)
+    }
+  }
+
+  if (loading) return <p className="rounded-lg bg-white p-5 shadow-sm">Loading business settings...</p>
+
+  return (
+    <form onSubmit={submit} className="grid gap-6">
+      <section className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
+        <h2 className="font-display text-2xl">Business Settings</h2>
+        <p className="mt-1 text-sm text-stone-600">Edit the client business identity, WhatsApp, SEO, location, and payment instructions from one place.</p>
+        <div className="mt-5 grid gap-4 lg:grid-cols-2">
+          <input name="name" value={form.name} onChange={change} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3" placeholder="Restaurant name" />
+          <input name="brandLabel" value={form.brandLabel} onChange={change} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3" placeholder="Brand label" />
+          <input name="tagline" value={form.tagline} onChange={change} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3 lg:col-span-2" placeholder="Tagline" />
+          <textarea name="shortDescription" value={form.shortDescription} onChange={change} className="focus-ring min-h-24 resize-y rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3 lg:col-span-2" placeholder="Short description" />
+          <input name="phoneDisplay" value={form.phoneDisplay} onChange={change} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3" placeholder="Phone display" />
+          <input name="phoneRaw" value={form.phoneRaw} onChange={change} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3" placeholder="WhatsApp number, for example 60123456789" />
+          <input name="email" value={form.email} onChange={change} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3" placeholder="Email" />
+          <input name="mapUrl" value={form.mapUrl} onChange={change} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3" placeholder="Google Maps link" />
+          <textarea name="address" value={form.address} onChange={change} className="focus-ring min-h-24 resize-y rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3 lg:col-span-2" placeholder="Address" />
+          <textarea name="openingHoursText" value={form.openingHoursText} onChange={change} className="focus-ring min-h-28 resize-y rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3 lg:col-span-2" placeholder={'Monday - Friday: 7:00 AM - 9:30 PM\nSaturday - Sunday: 8:00 AM - 10:30 PM'} />
+        </div>
+      </section>
+
+      <section className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
+        <h2 className="font-display text-2xl">Homepage and SEO</h2>
+        <div className="mt-5 grid gap-4 lg:grid-cols-2">
+          <input name="heroEyebrow" value={form.heroEyebrow} onChange={change} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3" placeholder="Hero eyebrow" />
+          <input name="heroTitle" value={form.heroTitle} onChange={change} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3" placeholder="Hero title" />
+          <textarea name="heroCopy" value={form.heroCopy} onChange={change} className="focus-ring min-h-24 resize-y rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3 lg:col-span-2" placeholder="Hero copy" />
+          <input name="heroPrimaryLabel" value={form.heroPrimaryLabel} onChange={change} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3" placeholder="Primary CTA label" />
+          <input name="heroSecondaryLabel" value={form.heroSecondaryLabel} onChange={change} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3" placeholder="Secondary CTA label" />
+          <input name="heroImageUrl" value={form.heroImageUrl} onChange={change} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3 lg:col-span-2" placeholder="Hero image URL" />
+          <ImageUploadField label="Upload hero image" value={form.heroImageUrl} folder="hero" onUploaded={(url) => setForm((current) => ({ ...current, heroImageUrl: url }))} />
+          <input name="seoTitle" value={form.seoTitle} onChange={change} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3" placeholder="SEO title" />
+          <textarea name="seoDescription" value={form.seoDescription} onChange={change} className="focus-ring min-h-24 resize-y rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3 lg:col-span-2" placeholder="SEO description" />
+        </div>
+      </section>
+
+      <section className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
+        <h2 className="font-display text-2xl">About, WhatsApp, and Payment Template</h2>
+        <div className="mt-5 grid gap-4 lg:grid-cols-2">
+          <input name="aboutTitle" value={form.aboutTitle} onChange={change} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3 lg:col-span-2" placeholder="About title" />
+          <textarea name="aboutCopy" value={form.aboutCopy} onChange={change} className="focus-ring min-h-28 resize-y rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3 lg:col-span-2" placeholder="About text" />
+          <input name="aboutImageUrl" value={form.aboutImageUrl} onChange={change} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3 lg:col-span-2" placeholder="About image URL" />
+          <ImageUploadField label="Upload about image" value={form.aboutImageUrl} folder="about" onUploaded={(url) => setForm((current) => ({ ...current, aboutImageUrl: url }))} />
+          <input name="aboutBadgeTitle" value={form.aboutBadgeTitle} onChange={change} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3" placeholder="About badge title" />
+          <input name="aboutBadgeText" value={form.aboutBadgeText} onChange={change} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3" placeholder="About badge text" />
+          <textarea name="reservationWhatsAppMessage" value={form.reservationWhatsAppMessage} onChange={change} className="focus-ring min-h-20 resize-y rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3" placeholder="Reservation WhatsApp template" />
+          <textarea name="orderWhatsAppMessage" value={form.orderWhatsAppMessage} onChange={change} className="focus-ring min-h-20 resize-y rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3" placeholder="Order WhatsApp template" />
+          <textarea name="contactWhatsAppMessage" value={form.contactWhatsAppMessage} onChange={change} className="focus-ring min-h-20 resize-y rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3" placeholder="Contact WhatsApp template" />
+          <textarea name="promotionWhatsAppMessage" value={form.promotionWhatsAppMessage} onChange={change} className="focus-ring min-h-20 resize-y rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3" placeholder="Promotion WhatsApp template" />
+          <label className="inline-flex items-center gap-3 text-sm font-bold lg:col-span-2">
+            <input type="checkbox" name="paymentInstructionsEnabled" checked={form.paymentInstructionsEnabled} onChange={change} />
+            Show payment instructions after order submission
+          </label>
+          <textarea name="paymentInstructions" value={form.paymentInstructions} onChange={change} className="focus-ring min-h-28 resize-y rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3 lg:col-span-2" placeholder="Bank, eWallet, QR, or manual payment instructions" />
+          <input name="paymentEnabledMethods" value={form.paymentEnabledMethods} onChange={change} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3" placeholder="Enabled payment methods" />
+          <input name="paymentQrImageUrl" value={form.paymentQrImageUrl} onChange={change} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3" placeholder="Payment QR image URL" />
+          <ImageUploadField label="Upload payment QR" value={form.paymentQrImageUrl} folder="payment" onUploaded={(url) => setForm((current) => ({ ...current, paymentQrImageUrl: url }))} />
+          <input name="providerPublicLabel" value={form.providerPublicLabel} onChange={change} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3" placeholder="Provider label" />
+        </div>
+      </section>
+
+      <div className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
+        <button className="focus-ring rounded-full bg-cafe-ink px-6 py-3 text-sm font-bold text-white">Save Business Settings</button>
+        {message ? <p className="mt-4 rounded-lg bg-cafe-cream px-4 py-3 text-sm">{message}</p> : null}
+      </div>
+    </form>
+  )
+}
+
+function GalleryPanel() {
+  const [items, setItems] = useState([])
+  const [form, setForm] = useState(emptyGalleryForm)
+  const [editingId, setEditingId] = useState(null)
+  const [message, setMessage] = useState('')
+
+  const refresh = async () => setItems(await fetchAdminGalleryItems())
+
+  useEffect(() => {
+    queueMicrotask(() => {
+      refresh().catch((error) => setMessage(error.message))
+    })
+  }, [])
+
+  const change = (event) => {
+    const { name, value, type, checked } = event.target
+    setForm((current) => ({ ...current, [name]: type === 'checkbox' ? checked : value }))
+  }
+
+  const submit = async (event) => {
+    event.preventDefault()
+    if (!form.image_url.trim()) {
+      setMessage('Please upload an image or add an image URL.')
+      return
+    }
+    try {
+      if (editingId) await updateGalleryItem(editingId, form)
+      else await createGalleryItem(form)
+      setForm(emptyGalleryForm)
+      setEditingId(null)
+      setMessage('Gallery item saved.')
+      await refresh()
+    } catch (error) {
+      setMessage(error.message)
+    }
+  }
+
+  const edit = (item) => {
+    setEditingId(item.id)
+    setForm({ ...emptyGalleryForm, ...item })
+  }
+
+  const remove = async (id) => {
+    if (!window.confirm('Delete this gallery item?')) return
+    await deleteGalleryItem(id)
+    await refresh()
+  }
+
+  return (
+    <div className="grid gap-6">
+      <form onSubmit={submit} className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
+        <h2 className="font-display text-2xl">{editingId ? 'Edit gallery item' : 'Add gallery item'}</h2>
+        <div className="mt-5 grid gap-4 lg:grid-cols-2">
+          <input name="title" value={form.title} onChange={change} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3" placeholder="Title" />
+          <input name="display_order" type="number" value={form.display_order} onChange={change} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3" placeholder="Display order" />
+          <input name="image_url" value={form.image_url} onChange={change} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3 lg:col-span-2" placeholder="Image URL" />
+          <ImageUploadField label="Upload gallery image" value={form.image_url} folder="gallery" onUploaded={(url) => setForm((current) => ({ ...current, image_url: url }))} />
+          <input name="alt_text" value={form.alt_text} onChange={change} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3" placeholder="Alt text / caption" />
+          <label className="inline-flex items-center gap-3 text-sm font-bold">
+            <input type="checkbox" name="is_published" checked={form.is_published} onChange={change} />
+            Published on public gallery
+          </label>
+        </div>
+        <button className="focus-ring mt-5 rounded-full bg-cafe-ink px-6 py-3 text-sm font-bold text-white">Save Gallery Item</button>
+        {editingId ? <button type="button" onClick={() => { setEditingId(null); setForm(emptyGalleryForm) }} className="ml-3 text-sm font-bold text-cafe-copper">Cancel</button> : null}
+        {message ? <p className="mt-4 rounded-lg bg-cafe-cream px-4 py-3 text-sm">{message}</p> : null}
+      </form>
+
+      <DataTable
+        title="Gallery items"
+        rows={items}
+        headers={['Preview', 'Title', 'Published', 'Order', 'Actions']}
+        render={(item) => [
+          <img key={`${item.id}-image`} src={item.image_url} alt={item.alt_text || item.title} className="h-16 w-24 rounded-lg object-cover" />,
+          item.title,
+          item.is_published ? 'Yes' : 'No',
+          item.display_order,
+          <span key={item.id} className="inline-flex gap-2">
+            <button type="button" onClick={() => edit(item)} className="font-bold text-cafe-copper">Edit</button>
+            <DangerButton onClick={() => remove(item.id)}>Delete</DangerButton>
+          </span>,
+        ]}
+      />
+    </div>
+  )
+}
+
+function PromotionsPanel() {
+  const [items, setItems] = useState([])
+  const [form, setForm] = useState(emptyPromotionForm)
+  const [editingId, setEditingId] = useState(null)
+  const [message, setMessage] = useState('')
+
+  const refresh = async () => setItems(await fetchAdminPromotions())
+
+  useEffect(() => {
+    queueMicrotask(() => {
+      refresh().catch((error) => setMessage(error.message))
+    })
+  }, [])
+
+  const change = (event) => {
+    const { name, value, type, checked } = event.target
+    setForm((current) => ({ ...current, [name]: type === 'checkbox' ? checked : value }))
+  }
+
+  const submit = async (event) => {
+    event.preventDefault()
+    try {
+      if (editingId) await updatePromotion(editingId, form)
+      else await createPromotion(form)
+      setForm(emptyPromotionForm)
+      setEditingId(null)
+      setMessage('Promotion saved.')
+      await refresh()
+    } catch (error) {
+      setMessage(error.message)
+    }
+  }
+
+  const edit = (item) => {
+    setEditingId(item.id)
+    setForm({ ...emptyPromotionForm, ...item })
+  }
+
+  const remove = async (id) => {
+    if (!window.confirm('Delete this promotion?')) return
+    await deletePromotion(id)
+    await refresh()
+  }
+
+  return (
+    <div className="grid gap-6">
+      <form onSubmit={submit} className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
+        <h2 className="font-display text-2xl">{editingId ? 'Edit promotion' : 'Add promotion'}</h2>
+        <div className="mt-5 grid gap-4 lg:grid-cols-2">
+          <input name="title" value={form.title} onChange={change} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3" placeholder="Promotion title" />
+          <input name="offer_text" value={form.offer_text} onChange={change} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3" placeholder="Offer text, for example RM 88" />
+          <textarea name="description" value={form.description} onChange={change} className="focus-ring min-h-24 resize-y rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3 lg:col-span-2" placeholder="Promotion description" />
+          <input name="image_url" value={form.image_url || ''} onChange={change} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3 lg:col-span-2" placeholder="Promotion image URL optional" />
+          <ImageUploadField label="Upload promotion image" value={form.image_url} folder="promotions" onUploaded={(url) => setForm((current) => ({ ...current, image_url: url }))} />
+          <textarea name="whatsapp_message" value={form.whatsapp_message} onChange={change} className="focus-ring min-h-20 resize-y rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3" placeholder="WhatsApp message template" />
+          <input name="display_order" type="number" value={form.display_order} onChange={change} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3" placeholder="Display order" />
+          <label className="inline-flex items-center gap-3 text-sm font-bold">
+            <input type="checkbox" name="is_active" checked={form.is_active} onChange={change} />
+            Active on public website
+          </label>
+        </div>
+        <button className="focus-ring mt-5 rounded-full bg-cafe-ink px-6 py-3 text-sm font-bold text-white">Save Promotion</button>
+        {editingId ? <button type="button" onClick={() => { setEditingId(null); setForm(emptyPromotionForm) }} className="ml-3 text-sm font-bold text-cafe-copper">Cancel</button> : null}
+        {message ? <p className="mt-4 rounded-lg bg-cafe-cream px-4 py-3 text-sm">{message}</p> : null}
+      </form>
+
+      <DataTable
+        title="Promotions"
+        rows={items}
+        headers={['Title', 'Offer', 'Active', 'Order', 'Actions']}
+        render={(item) => [
+          item.title,
+          item.offer_text,
+          item.is_active ? 'Yes' : 'No',
+          item.display_order,
+          <span key={item.id} className="inline-flex gap-2">
+            <button type="button" onClick={() => edit(item)} className="font-bold text-cafe-copper">Edit</button>
+            <DangerButton onClick={() => remove(item.id)}>Delete</DangerButton>
+          </span>,
+        ]}
+      />
+    </div>
+  )
+}
+
 function MenuCrudPanel() {
   const [items, setItems] = useState([])
   const [form, setForm] = useState(emptyMenuForm)
@@ -522,6 +860,7 @@ function MenuCrudPanel() {
           <input name="category" value={form.category} onChange={change} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3" placeholder="Category, for example Brunch" />
           <input name="tag" value={form.tag} onChange={change} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3" placeholder="Menu badge, for example Signature" />
           <input name="image_url" value={form.image_url} onChange={change} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3" placeholder="Image URL optional" />
+          <ImageUploadField label="Upload menu image" value={form.image_url} folder="menu" onUploaded={(url) => setForm((current) => ({ ...current, image_url: url }))} />
           <input name="display_order" value={form.display_order} onChange={change} className="focus-ring rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3" placeholder="Display order" />
           <label className="grid gap-2 text-sm font-bold">
             Customization options
@@ -847,9 +1186,12 @@ function AdminDashboard({ user, onLogout }) {
           {loading ? <p className="rounded-lg bg-white p-5 shadow-sm">Loading dashboard data...</p> : null}
           {error ? <p className="rounded-lg bg-red-50 p-5 text-red-800">{error}</p> : null}
           {!loading && !error && activeTab === 'overview' ? <Overview dataset={dataset} /> : null}
+          {!loading && !error && activeTab === 'business' ? <BusinessSettingsPanel /> : null}
           {!loading && !error && activeTab === 'reservations' ? <ReservationsPanel rows={dataset.reservations} refresh={refresh} /> : null}
           {!loading && !error && activeTab === 'messages' ? <MessagesPanel rows={dataset.messages} refresh={refresh} /> : null}
           {!loading && !error && activeTab === 'menu' ? <MenuCrudPanel /> : null}
+          {!loading && !error && activeTab === 'gallery' ? <GalleryPanel /> : null}
+          {!loading && !error && activeTab === 'promotions' ? <PromotionsPanel /> : null}
           {!loading && !error && activeTab === 'orders' ? <OrdersPanel rows={dataset.orders} payments={dataset.payments} refresh={refresh} /> : null}
           {!loading && !error && activeTab === 'payments' ? <PaymentsPanel rows={dataset.payments} orders={dataset.orders} refresh={refresh} /> : null}
           {!loading && !error && activeTab === 'reports' ? <ReportsPanel dataset={dataset} /> : null}

@@ -14,7 +14,7 @@ Amber & Oak Cafe is a React + Supabase + Netlify project built as a realistic fr
 
 - React + Vite
 - Tailwind CSS
-- Supabase Database, Auth, REST API, and Row Level Security
+- Supabase Database, Auth, REST API, Storage, and Row Level Security
 - Netlify hosting and SPA redirects
 - Recharts for dashboard charts
 - jsPDF and CSV export for reports
@@ -28,8 +28,11 @@ Amber & Oak Cafe is a React + Supabase + Netlify project built as a realistic fr
 - Reservation form saves to `reservations`.
 - Order form saves to `orders` and `order_items`, including item notes and customizations.
 - Menu loads from Supabase and falls back to clearly demo seed content when Supabase is not configured.
+- Business settings load from Supabase so each client can edit restaurant name, contact info, WhatsApp messages, homepage copy, SEO text, opening hours, and payment instructions without code changes.
+- Gallery and promotions can be managed from the admin dashboard.
+- Supabase Storage bucket `restaurant-assets` is used for menu, gallery, promotion, hero, about, and payment QR images.
 - Admin login uses Supabase Auth and `app_metadata.role = "admin"`.
-- Admin dashboard includes overview metrics, recent activity, reservations, messages, menu CRUD, orders, reports, PDF export, and CSV export.
+- Admin dashboard includes overview metrics, recent activity, business settings, reservations, messages, menu CRUD, gallery, promotions, orders, payments, reports, PDF export, and CSV export.
 - Payment Management tracks manual cash/card/bank/eWallet/QR payments, links payments to orders, and generates printable receipts.
 
 ## Environment Variables
@@ -73,6 +76,8 @@ https://your-netlify-site.netlify.app/admin
 https://your-netlify-site.netlify.app/admin/login
 ```
 
+8. Confirm Supabase Storage has a public bucket named `restaurant-assets`. The schema file creates it automatically when run with sufficient permissions.
+
 ## SQL Schema
 
 Core tables:
@@ -83,13 +88,23 @@ Core tables:
 - `orders`: order header, subtotal, order status, payment status, and notes.
 - `order_items`: order lines, quantity, item price, customizations, and item notes.
 - `payment_records`: manual/admin payment tracking linked to orders where applicable.
+- `business_settings`: editable client business profile, SEO, WhatsApp templates, location, opening hours, and payment instructions.
+- `gallery_items`: admin-managed public gallery images and captions.
+- `promotions`: admin-managed public offers and campaign copy.
+
+Storage:
+
+- `restaurant-assets`: public-read image bucket.
+- Authenticated admins can upload, update, and delete images.
+- Public users can only read published image URLs.
 
 Security:
 
 - Row Level Security is enabled on all public tables.
 - Public users can only view available menu items.
+- Public users can view published gallery items, active promotions, and public business display settings.
 - Public users can insert reservations, contact messages, orders, and order items.
-- Public users cannot read private reservations, messages, or orders.
+- Public users cannot read private reservations, messages, orders, or payments.
 - Admin access is controlled by Supabase Auth app metadata: `role = admin`.
 
 ## Local Testing
@@ -117,12 +132,47 @@ Recommended checks:
 6. Search/filter reservations, update status, and delete a test reservation.
 7. Search/filter messages, mark read/replied, and delete a test message.
 8. Add, edit, hide, and delete a test menu item.
-9. Confirm the public menu updates after admin menu changes.
-10. Update order status and payment status.
-11. Add a manual payment record and link it to an order.
-12. Confirm completed orders have a `Paid` payment or confirm cash payment during completion.
-13. Print a receipt from a paid payment/order.
-14. Export daily, weekly, monthly, and yearly reports.
+9. Upload a menu image and confirm it appears in the menu record.
+10. Update Business Settings and confirm public name, phone, WhatsApp message, address, opening hours, and SEO text update after refresh.
+11. Add/edit/hide a gallery item and confirm the public gallery updates.
+12. Add/edit/deactivate a promotion and confirm the public promotion updates.
+13. Submit an order and confirm payment instructions or QR details appear when enabled.
+14. Update order status and payment status.
+15. Add a manual payment record and link it to an order.
+16. Confirm completed orders have a `Paid` payment or confirm cash payment during completion.
+17. Print a receipt from a paid payment/order.
+18. Export daily, weekly, monthly, and yearly reports.
+
+## Client Handoff Workflow
+
+For a real restaurant client, the normal setup is:
+
+1. Replace business details in Admin > Business Settings.
+2. Set the client's WhatsApp number without `+`, spaces, or dashes, for example `60123456789`.
+3. Edit WhatsApp message templates for reservations, orders, contact, and promotions.
+4. Upload real hero/about/gallery/menu/promotion images.
+5. Update menu categories, descriptions, prices, availability, and customization options.
+6. Add active promotion campaigns.
+7. Configure payment instructions and upload a DuitNow/bank/eWallet QR image if the business uses one.
+8. Create owner/staff admin accounts in Supabase Auth and set `app_metadata.role = "admin"`.
+
+## Payment Template Notes
+
+This project is gateway-ready but does not process cards or eWallet charges directly yet.
+
+Current payment model:
+
+- Manual/admin payment tracking.
+- Payment methods: Cash, Credit/Debit Card, Online Bank Transfer, TNG eWallet, GrabPay, DuitNow QR, Other.
+- Payment statuses: Pending, Paid, Failed, Refunded, Cancelled.
+- Paid revenue in reports comes from `payment_records` with status `Paid`.
+- Public order confirmation can show payment instructions and QR image from Business Settings.
+
+Future live payment gateway:
+
+- Add Stripe, Billplz, ToyyibPay, iPay88, or another provider through Netlify Functions or Supabase Edge Functions.
+- Do not put gateway secret keys in frontend code or public database rows.
+- Keep frontend provider fields as display/config placeholders only.
 
 ## Deployment
 
@@ -165,6 +215,11 @@ npm run build
 - Menu CRUD: complete.
 - Order and payment status management: complete.
 - Manual Payment Management: complete.
+- Business Settings CMS: complete.
+- Gallery CMS: complete.
+- Promotions CMS: complete.
+- Supabase Storage image upload UI: complete.
+- Manual payment instruction and QR template: complete.
 - Printable paid-order receipts: complete.
 - Sales reports and exports: complete.
 - RLS and public/private data separation: complete.
@@ -173,6 +228,6 @@ npm run build
 ## Remaining Production Notes
 
 - Replace placeholder restaurant name, address, email, phone number, photos, menu, and pricing for each real client.
-- Add a real payment gateway if the business wants online payment collection.
+- Add a real payment gateway through backend functions if the business wants online payment collection.
 - Add email/SMS notifications if the restaurant needs staff alerts.
 - For high traffic or abuse-prone sites, add CAPTCHA or server-side rate limiting.

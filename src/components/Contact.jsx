@@ -1,6 +1,6 @@
 import { Mail, MapPin, MessageCircle, Phone, Send } from 'lucide-react'
 import { useState } from 'react'
-import { cafe } from '../data/siteContent.js'
+import { useBusinessSettings } from '../context/useBusinessSettings.js'
 import { submitContactMessage } from '../services/customerService.js'
 
 const initialForm = {
@@ -11,6 +11,7 @@ const initialForm = {
 }
 
 function Contact() {
+  const { business } = useBusinessSettings()
   const [form, setForm] = useState(initialForm)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [status, setStatus] = useState({ type: 'idle', message: '' })
@@ -65,27 +66,27 @@ function Contact() {
 
           <div className="mt-8 grid gap-4">
             <a
-              href={`tel:${cafe.phoneRaw}`}
+              href={`tel:${business.phoneRaw}`}
               className="focus-ring flex items-center gap-4 rounded-lg border border-stone-200 bg-white p-5 shadow-sm transition hover:border-cafe-sage"
             >
               <Phone size={22} className="text-cafe-sage" aria-hidden="true" />
               <span>
                 <span className="block text-sm text-stone-500">Phone</span>
-                <span className="font-bold">{cafe.phoneDisplay}</span>
+                <span className="font-bold">{business.phoneDisplay}</span>
               </span>
             </a>
             <a
-              href={`mailto:${cafe.email}`}
+              href={`mailto:${business.email}`}
               className="focus-ring flex items-center gap-4 rounded-lg border border-stone-200 bg-white p-5 shadow-sm transition hover:border-cafe-sage"
             >
               <Mail size={22} className="text-cafe-sage" aria-hidden="true" />
               <span>
                 <span className="block text-sm text-stone-500">Email</span>
-                <span className="font-bold">{cafe.email}</span>
+                <span className="font-bold">{business.email}</span>
               </span>
             </a>
             <a
-              href={cafe.mapUrl}
+              href={business.mapUrl}
               target="_blank"
               rel="noreferrer"
               className="focus-ring flex items-center gap-4 rounded-lg border border-stone-200 bg-white p-5 shadow-sm transition hover:border-cafe-sage"
@@ -93,11 +94,11 @@ function Contact() {
               <MapPin size={22} className="text-cafe-sage" aria-hidden="true" />
               <span>
                 <span className="block text-sm text-stone-500">Address</span>
-                <span className="font-bold">{cafe.address}</span>
+                <span className="font-bold">{business.address}</span>
               </span>
             </a>
             <a
-              href={cafe.whatsappContactLink}
+              href={business.whatsappContactLink}
               target="_blank"
               rel="noreferrer"
               className="focus-ring inline-flex items-center justify-center gap-2 rounded-full bg-[#25D366] px-6 py-4 text-sm font-bold text-cafe-ink shadow-soft transition hover:bg-[#35e476]"

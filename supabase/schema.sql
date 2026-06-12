@@ -83,6 +83,37 @@ create table if not exists public.payment_records (
   created_at timestamptz not null default now()
 );
 
+create table if not exists public.business_settings (
+  id text primary key default 'default' check (id = 'default'),
+  settings jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.gallery_items (
+  id uuid primary key default gen_random_uuid(),
+  title text not null,
+  image_url text not null,
+  alt_text text,
+  is_published boolean not null default true,
+  display_order integer not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create table if not exists public.promotions (
+  id uuid primary key default gen_random_uuid(),
+  title text not null,
+  description text not null default '',
+  offer_text text not null default '',
+  image_url text,
+  whatsapp_message text,
+  is_active boolean not null default true,
+  display_order integer not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
 create or replace function public.set_updated_at()
 returns trigger
 language plpgsql
@@ -105,6 +136,15 @@ create trigger set_contact_messages_updated_at before update on public.contact_m
 drop trigger if exists set_orders_updated_at on public.orders;
 create trigger set_orders_updated_at before update on public.orders for each row execute function public.set_updated_at();
 
+drop trigger if exists set_business_settings_updated_at on public.business_settings;
+create trigger set_business_settings_updated_at before update on public.business_settings for each row execute function public.set_updated_at();
+
+drop trigger if exists set_gallery_items_updated_at on public.gallery_items;
+create trigger set_gallery_items_updated_at before update on public.gallery_items for each row execute function public.set_updated_at();
+
+drop trigger if exists set_promotions_updated_at on public.promotions;
+create trigger set_promotions_updated_at before update on public.promotions for each row execute function public.set_updated_at();
+
 create index if not exists menu_items_display_order_idx on public.menu_items(display_order, name);
 create index if not exists reservations_date_idx on public.reservations(reservation_date, reservation_time);
 create index if not exists reservations_status_idx on public.reservations(status);
@@ -116,6 +156,8 @@ create index if not exists order_items_menu_item_id_idx on public.order_items(me
 create index if not exists payment_records_order_id_idx on public.payment_records(order_id);
 create index if not exists payment_records_status_idx on public.payment_records(payment_status, payment_date desc);
 create index if not exists payment_records_method_idx on public.payment_records(payment_method, payment_date desc);
+create index if not exists gallery_items_public_idx on public.gallery_items(is_published, display_order);
+create index if not exists promotions_active_idx on public.promotions(is_active, display_order);
 
 alter table public.menu_items enable row level security;
 alter table public.reservations enable row level security;
@@ -123,6 +165,9 @@ alter table public.contact_messages enable row level security;
 alter table public.orders enable row level security;
 alter table public.order_items enable row level security;
 alter table public.payment_records enable row level security;
+alter table public.business_settings enable row level security;
+alter table public.gallery_items enable row level security;
+alter table public.promotions enable row level security;
 
 create or replace function public.is_admin()
 returns boolean
@@ -143,6 +188,12 @@ grant select, update, delete on public.contact_messages to authenticated;
 grant select, update, delete on public.orders to authenticated;
 grant select, update, delete on public.order_items to authenticated;
 grant select, insert, update, delete on public.payment_records to authenticated;
+grant select on public.business_settings to anon, authenticated;
+grant select on public.gallery_items to anon, authenticated;
+grant select on public.promotions to anon, authenticated;
+grant insert, update, delete on public.business_settings to authenticated;
+grant insert, update, delete on public.gallery_items to authenticated;
+grant insert, update, delete on public.promotions to authenticated;
 
 create policy "Public can view available menu items" on public.menu_items
   for select to anon, authenticated
@@ -193,3 +244,51 @@ create policy "Admins manage payment records" on public.payment_records
   for all to authenticated
   using (public.is_admin())
   with check (public.is_admin());
+
+create policy "Public can view business settings" on public.business_settings
+  for select to anon, authenticated
+  using (true);
+
+create policy "Admins manage business settings" on public.business_settings
+  for all to authenticated
+  using (public.is_admin())
+  with check (public.is_admin());
+
+create policy "Public can view published gallery items" on public.gallery_items
+  for select to anon, authenticated
+  using (is_published = true or public.is_admin());
+
+create policy "Admins manage gallery items" on public.gallery_items
+  for all to authenticated
+  using (public.is_admin())
+  with check (public.is_admin());
+
+create policy "Public can view active promotions" on public.promotions
+  for select to anon, authenticated
+  using (is_active = true or public.is_admin());
+
+create policy "Admins manage promotions" on public.promotions
+  for all to authenticated
+  using (public.is_admin())
+  with check (public.is_admin());
+
+insert into storage.buckets (id, name, public)
+values ('restaurant-assets', 'restaurant-assets', true)
+on conflict (id) do update set public = true;
+
+create policy "Public can read restaurant assets" on storage.objects
+  for select to anon, authenticated
+  using (bucket_id = 'restaurant-assets');
+
+create policy "Admins can upload restaurant assets" on storage.objects
+  for insert to authenticated
+  with check (bucket_id = 'restaurant-assets' and public.is_admin());
+
+create policy "Admins can update restaurant assets" on storage.objects
+  for update to authenticated
+  using (bucket_id = 'restaurant-assets' and public.is_admin())
+  with check (bucket_id = 'restaurant-assets' and public.is_admin());
+
+create policy "Admins can delete restaurant assets" on storage.objects
+  for delete to authenticated
+  using (bucket_id = 'restaurant-assets' and public.is_admin());

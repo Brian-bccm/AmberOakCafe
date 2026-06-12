@@ -1,12 +1,15 @@
 import { CalendarCheck, ChevronRight, MessageCircle, Star } from 'lucide-react'
-import { cafe, highlights } from '../data/siteContent.js'
+import { useBusinessSettings } from '../context/useBusinessSettings.js'
+import { highlights } from '../data/siteContent.js'
 
 function Hero() {
+  const { business } = useBusinessSettings()
+
   return (
     <section id="home" className="relative overflow-hidden bg-cafe-ink text-white">
       <div className="absolute inset-0">
         <img
-          src="https://images.unsplash.com/photo-1517248135467-4c7edcad34c4?auto=format&fit=crop&w=1800&q=80"
+          src={business.heroImageUrl}
           alt="Premium cafe dining space with warm lighting"
           className="h-full w-full object-cover opacity-55"
         />
@@ -17,31 +20,31 @@ function Hero() {
         <div className="max-w-3xl">
           <div className="inline-flex items-center gap-2 rounded-full border border-white/25 bg-white/10 px-4 py-2 text-sm font-semibold backdrop-blur">
             <Star size={16} className="fill-cafe-amber text-cafe-amber" aria-hidden="true" />
-            Bangsar all-day brunch and coffee bar
+            {business.heroEyebrow}
           </div>
 
           <h1 className="mt-6 font-display text-5xl leading-[1.02] text-white sm:mt-7 sm:text-6xl lg:text-7xl">
-            Amber & Oak Cafe
+            {business.heroTitle || business.name}
           </h1>
-          <p className="mt-5 max-w-2xl text-lg leading-8 text-stone-100 sm:mt-6 sm:text-xl">{cafe.tagline}</p>
+          <p className="mt-5 max-w-2xl text-lg leading-8 text-stone-100 sm:mt-6 sm:text-xl">{business.heroCopy || business.tagline}</p>
 
           <div className="mt-7 flex flex-col gap-3 sm:mt-9 sm:flex-row">
             <a
               href="#menu"
               className="focus-ring inline-flex items-center justify-center gap-2 rounded-full bg-cafe-amber px-6 py-4 text-sm font-bold text-cafe-ink shadow-soft transition hover:bg-amber-300"
             >
-              View Menu
+              {business.heroPrimaryLabel || 'View Menu'}
               <ChevronRight size={18} aria-hidden="true" />
             </a>
             <a
-              href={cafe.whatsappOrderLink}
+              href={business.whatsappOrderLink}
               className="focus-ring inline-flex items-center justify-center gap-2 rounded-full border border-white/35 bg-white/10 px-6 py-4 text-sm font-bold text-white backdrop-blur transition hover:bg-white hover:text-cafe-ink"
               target="_blank"
               rel="noreferrer"
               aria-label="Order or reserve by WhatsApp"
             >
               <MessageCircle size={18} aria-hidden="true" />
-              Order or Reserve
+              {business.heroSecondaryLabel || 'Order or Reserve'}
             </a>
           </div>
 

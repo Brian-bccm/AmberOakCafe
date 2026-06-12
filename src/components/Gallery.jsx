@@ -1,6 +1,8 @@
-import { galleryImages } from '../data/siteContent.js'
+import { useBusinessSettings } from '../context/useBusinessSettings.js'
 
 function Gallery() {
+  const { galleryItems } = useBusinessSettings()
+
   return (
     <section id="gallery" className="bg-cafe-oat/70">
       <div className="section-shell">
@@ -11,16 +13,16 @@ function Gallery() {
         </p>
 
         <div className="mt-10 grid gap-4 md:grid-cols-4 md:grid-rows-2">
-          {galleryImages.map((image, index) => (
+          {galleryItems.map((image, index) => (
             <figure
-              key={image.src}
+              key={image.id || image.image_url}
               className={`overflow-hidden rounded-lg bg-stone-200 shadow-sm ${
                 index === 0 ? 'md:col-span-2 md:row-span-2' : ''
               }`}
             >
               <img
-                src={image.src}
-                alt={image.alt}
+                src={image.image_url || image.src}
+                alt={image.alt_text || image.title}
                 className="h-full min-h-64 w-full object-cover transition duration-500 hover:scale-105"
                 loading={index === 0 ? 'eager' : 'lazy'}
               />

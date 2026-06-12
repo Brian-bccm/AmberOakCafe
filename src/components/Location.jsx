@@ -1,7 +1,9 @@
 import { Clock, MapPin, Navigation } from 'lucide-react'
-import { cafe, openingHours } from '../data/siteContent.js'
+import { useBusinessSettings } from '../context/useBusinessSettings.js'
 
 function Location() {
+  const { business } = useBusinessSettings()
+
   return (
     <section id="location" className="bg-white">
       <div className="section-shell grid gap-10 lg:grid-cols-[0.9fr_1.1fr]">
@@ -18,7 +20,7 @@ function Location() {
               <MapPin className="mt-1 text-cafe-copper" size={22} aria-hidden="true" />
               <div>
                 <h3 className="font-bold">Address</h3>
-                <p className="mt-1 leading-7 text-stone-600">{cafe.address}</p>
+                <p className="mt-1 leading-7 text-stone-600">{business.address}</p>
               </div>
             </div>
             <div className="flex gap-4">
@@ -26,7 +28,7 @@ function Location() {
               <div>
                 <h3 className="font-bold">Opening Hours</h3>
                 <dl className="mt-2 space-y-2 text-sm text-stone-600">
-                  {openingHours.map((item) => (
+                  {business.openingHours.map((item) => (
                     <div key={item.day} className="flex flex-wrap justify-between gap-3">
                       <dt>{item.day}</dt>
                       <dd className="font-semibold text-cafe-ink">{item.time}</dd>
@@ -38,7 +40,7 @@ function Location() {
           </div>
 
           <a
-            href={cafe.mapUrl}
+            href={business.mapUrl}
             className="focus-ring mt-8 inline-flex items-center gap-2 rounded-full bg-cafe-ink px-6 py-4 text-sm font-bold text-white transition hover:bg-cafe-forest"
             target="_blank"
             rel="noreferrer"
@@ -53,7 +55,7 @@ function Location() {
           <div className="absolute left-1/2 top-1/2 w-[78%] -translate-x-1/2 -translate-y-1/2 rounded-lg border border-cafe-sage/40 bg-white p-6 shadow-soft">
             <p className="text-xs font-bold uppercase tracking-[0.18em] text-cafe-sage">Map Preview</p>
             <h3 className="mt-3 font-display text-3xl text-cafe-ink">Bangsar cafe district</h3>
-            <p className="mt-3 leading-7 text-stone-600">{cafe.address}</p>
+            <p className="mt-3 leading-7 text-stone-600">{business.address}</p>
             <div className="mt-6 h-2 rounded-full bg-cafe-oat">
               <div className="h-2 w-2/3 rounded-full bg-cafe-copper" />
             </div>

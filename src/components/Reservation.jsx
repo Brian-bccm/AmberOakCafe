@@ -1,6 +1,6 @@
 import { CalendarCheck, MessageCircle, Users } from 'lucide-react'
 import { useState } from 'react'
-import { cafe } from '../data/siteContent.js'
+import { useBusinessSettings } from '../context/useBusinessSettings.js'
 import { submitReservation } from '../services/customerService.js'
 
 const initialForm = {
@@ -14,6 +14,7 @@ const initialForm = {
 }
 
 function Reservation() {
+  const { business } = useBusinessSettings()
   const [form, setForm] = useState(initialForm)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [status, setStatus] = useState({ type: 'idle', message: '' })
@@ -68,7 +69,7 @@ function Reservation() {
               </div>
             </div>
             <a
-              href={cafe.whatsappLink}
+              href={business.whatsappLink}
               target="_blank"
               rel="noreferrer"
               className="focus-ring inline-flex items-center justify-center gap-2 rounded-full bg-[#25D366] px-6 py-4 text-sm font-bold text-cafe-ink shadow-soft transition hover:bg-[#35e476]"

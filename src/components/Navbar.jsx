@@ -1,9 +1,11 @@
 import { Menu, MessageCircle, X } from 'lucide-react'
 import { useState } from 'react'
-import { cafe, navItems } from '../data/siteContent.js'
+import { useBusinessSettings } from '../context/useBusinessSettings.js'
+import { navItems } from '../data/siteContent.js'
 
 function Navbar() {
   const [isOpen, setIsOpen] = useState(false)
+  const { business } = useBusinessSettings()
 
   const closeMenu = () => setIsOpen(false)
 
@@ -18,8 +20,8 @@ function Navbar() {
             A&O
           </span>
           <span>
-            <span className="block font-display text-xl leading-none">{cafe.name}</span>
-            <span className="hidden text-xs uppercase tracking-[0.18em] text-stone-500 sm:block">Premium cafe</span>
+            <span className="block font-display text-xl leading-none">{business.name}</span>
+            <span className="hidden text-xs uppercase tracking-[0.18em] text-stone-500 sm:block">{business.brandLabel}</span>
           </span>
         </a>
 
@@ -37,7 +39,7 @@ function Navbar() {
 
         <div className="hidden items-center gap-3 lg:flex">
           <a
-            href={cafe.whatsappLink}
+            href={business.whatsappLink}
             className="focus-ring inline-flex items-center gap-2 rounded-full bg-cafe-forest px-5 py-3 text-sm font-bold text-white shadow-soft transition hover:bg-cafe-ink"
             target="_blank"
             rel="noreferrer"
@@ -74,7 +76,7 @@ function Navbar() {
             ))}
           </div>
           <a
-            href={cafe.whatsappLink}
+            href={business.whatsappLink}
             className="focus-ring mt-4 inline-flex w-full items-center justify-center gap-2 rounded-full bg-cafe-forest px-5 py-3 text-sm font-bold text-white"
             target="_blank"
             rel="noreferrer"

@@ -1,5 +1,6 @@
 import { ShoppingBag } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
+import { useBusinessSettings } from '../context/useBusinessSettings.js'
 import { fetchPublicMenuItems, fallbackMenu } from '../services/menuService.js'
 import { submitOrder } from '../services/customerService.js'
 import { formatCurrency, normalizePrice } from '../utils/formatters.js'
@@ -7,6 +8,7 @@ import { formatCurrency, normalizePrice } from '../utils/formatters.js'
 const initialCustomer = { name: '', phone: '', email: '', order_type: 'pickup' }
 
 function Order() {
+  const { business } = useBusinessSettings()
   const [items, setItems] = useState(fallbackMenu().slice(0, 4).map((item) => ({ ...item, quantity: 0, notes: '', customizations: {} })))
   const [customer, setCustomer] = useState(initialCustomer)
   const [notes, setNotes] = useState('')
@@ -159,6 +161,15 @@ function Order() {
             <div aria-live="polite" className={`mt-4 rounded-lg px-4 py-3 text-sm ${status.type === 'error' ? 'bg-red-50 text-red-800' : status.type === 'success' ? 'bg-emerald-50 text-emerald-800' : 'bg-white text-stone-600'}`}>
               {status.message || 'The restaurant confirms final availability and timing after receiving the request.'}
             </div>
+            {status.type === 'success' && business.paymentInstructionsEnabled ? (
+              <div className="mt-4 rounded-lg border border-cafe-sage/30 bg-white p-4 text-sm">
+                <p className="font-bold text-cafe-ink">Payment instructions</p>
+                <p className="mt-2 leading-6 text-stone-600">{business.paymentInstructions}</p>
+                {business.paymentQrImageUrl ? (
+                  <img src={business.paymentQrImageUrl} alt="Payment QR code" className="mt-4 h-40 w-40 rounded-lg border border-stone-200 object-cover" />
+                ) : null}
+              </div>
+            ) : null}
           </div>
         </form>
       </div>
