@@ -15,3 +15,7 @@ export function orderMessage(cafeName, itemName = '') {
 export function promotionMessage(cafeName) {
   return `Hi ${cafeName}, I would like to claim the Weekend Brunch Set promotion.`
 }
+
+export function contactMessage(cafeName) {
+  return `Hi ${cafeName}, I have a general enquiry.`
+}

@@ -1,4 +1,4 @@
-import { Mail, Phone, Send } from 'lucide-react'
+import { Mail, MapPin, MessageCircle, Phone, Send } from 'lucide-react'
 import { useState } from 'react'
 import { cafe } from '../data/siteContent.js'
 import { submitContactMessage } from '../services/customerService.js'
@@ -58,9 +58,9 @@ function Contact() {
       <div className="section-shell grid gap-10 lg:grid-cols-[0.9fr_1.1fr]">
         <div>
           <p className="eyebrow">Contact</p>
-          <h2 className="section-title">Send an enquiry or reserve through WhatsApp.</h2>
+          <h2 className="section-title">Ask a question, request details, or contact the cafe team.</h2>
           <p className="section-copy">
-            The form saves enquiries to Supabase when configured, while WhatsApp gives customers a fast direct action.
+            Use this section for general enquiries, private event questions, catering requests, feedback, or business contact.
           </p>
 
           <div className="mt-8 grid gap-4">
@@ -83,6 +83,27 @@ function Contact() {
                 <span className="block text-sm text-stone-500">Email</span>
                 <span className="font-bold">{cafe.email}</span>
               </span>
+            </a>
+            <a
+              href={cafe.mapUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="focus-ring flex items-center gap-4 rounded-lg border border-stone-200 bg-white p-5 shadow-sm transition hover:border-cafe-sage"
+            >
+              <MapPin size={22} className="text-cafe-sage" aria-hidden="true" />
+              <span>
+                <span className="block text-sm text-stone-500">Address</span>
+                <span className="font-bold">{cafe.address}</span>
+              </span>
+            </a>
+            <a
+              href={cafe.whatsappContactLink}
+              target="_blank"
+              rel="noreferrer"
+              className="focus-ring inline-flex items-center justify-center gap-2 rounded-full bg-[#25D366] px-6 py-4 text-sm font-bold text-cafe-ink shadow-soft transition hover:bg-[#35e476]"
+            >
+              <MessageCircle size={18} aria-hidden="true" />
+              General WhatsApp Enquiry
             </a>
           </div>
         </div>
@@ -147,7 +168,7 @@ function Contact() {
               value={form.message}
               onChange={handleChange}
               className="focus-ring min-h-36 resize-y rounded-lg border border-stone-300 bg-cafe-cream px-4 py-3 font-normal text-cafe-ink"
-              placeholder="Tell us your date, time, guests, or order request."
+              placeholder="Ask about private events, catering, feedback, collaborations, or other enquiries."
             />
           </label>
 
@@ -170,7 +191,7 @@ function Contact() {
                   : 'bg-cafe-cream text-stone-600'
             }`}
           >
-            {status.message || 'For urgent same-day reservations, WhatsApp is the fastest option.'}
+            {status.message || 'For table bookings, use the dedicated Reservation section above.'}
           </div>
         </form>
       </div>

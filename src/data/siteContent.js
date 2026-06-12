@@ -1,4 +1,4 @@
-import { buildWhatsAppLink, orderMessage, promotionMessage, reservationMessage } from '../utils/whatsapp.js'
+import { buildWhatsAppLink, contactMessage, orderMessage, promotionMessage, reservationMessage } from '../utils/whatsapp.js'
 
 export const cafe = {
   name: 'Amber & Oak Cafe',
@@ -13,6 +13,7 @@ export const cafe = {
 cafe.whatsappLink = buildWhatsAppLink(cafe.phoneRaw, reservationMessage(cafe.name))
 cafe.whatsappOrderLink = buildWhatsAppLink(cafe.phoneRaw, orderMessage(cafe.name))
 cafe.whatsappPromotionLink = buildWhatsAppLink(cafe.phoneRaw, promotionMessage(cafe.name))
+cafe.whatsappContactLink = buildWhatsAppLink(cafe.phoneRaw, contactMessage(cafe.name))
 
 export const navItems = [
   { label: 'About', href: '#about' },
