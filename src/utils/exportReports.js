@@ -8,6 +8,7 @@ function orderRows(report) {
     Customer: order.customer_name,
     Phone: order.phone,
     Status: order.status,
+    Payment: order.payment_status || 'unpaid',
     Revenue: Number(order.subtotal || 0),
   }))
 }
@@ -23,8 +24,8 @@ export function exportReportToPdf(report) {
 
   autoTable(doc, {
     startY: 56,
-    head: [['Date', 'Customer', 'Phone', 'Status', 'Revenue']],
-    body: orderRows(report).map((row) => [row.Date, row.Customer, row.Phone, row.Status, formatCurrency(row.Revenue)]),
+    head: [['Date', 'Customer', 'Phone', 'Status', 'Payment', 'Revenue']],
+    body: orderRows(report).map((row) => [row.Date, row.Customer, row.Phone, row.Status, row.Payment, formatCurrency(row.Revenue)]),
   })
 
   doc.save(`amber-oak-${report.range}-report.pdf`)
@@ -43,7 +44,7 @@ export function exportReportToExcel(report) {
     { Section: 'Summary', Metric: 'Total orders', Value: report.analytics.totalOrders },
     { Section: 'Summary', Metric: 'Total customers', Value: report.analytics.totalCustomers },
     { Section: 'Summary', Metric: 'Reservations', Value: report.analytics.reservationsTotal },
-    ...orderRows(report).map((row) => ({ Section: 'Orders', Metric: row.Customer, Value: row.Revenue })),
+    ...orderRows(report).map((row) => ({ Section: 'Orders', Metric: `${row.Customer} (${row.Payment})`, Value: row.Revenue })),
     ...report.analytics.topSellingItems.map((item) => ({ Section: 'Top Items', Metric: item.name, Value: item.quantity })),
   ]
   const blob = new Blob([toCsv(rows)], { type: 'text/csv;charset=utf-8;' })

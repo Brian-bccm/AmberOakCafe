@@ -3,10 +3,10 @@ import { buildWhatsAppLink, orderMessage, promotionMessage, reservationMessage }
 export const cafe = {
   name: 'Amber & Oak Cafe',
   tagline: 'All-day brunch, craft coffee, and warm hospitality in Bangsar.',
-  phoneDisplay: '+60 12-345 6789',
-  phoneRaw: '60123456789',
-  email: 'hello@amberandoak.example',
-  address: '28, Jalan Telawi, Bangsar, 59100 Kuala Lumpur',
+  phoneDisplay: import.meta.env.VITE_RESTAURANT_PHONE_DISPLAY || '+60 12-345 6789',
+  phoneRaw: import.meta.env.VITE_RESTAURANT_WHATSAPP_NUMBER || '60123456789',
+  email: import.meta.env.VITE_RESTAURANT_EMAIL || 'hello@amberandoak.example',
+  address: import.meta.env.VITE_RESTAURANT_ADDRESS || '28, Jalan Telawi, Bangsar, 59100 Kuala Lumpur',
   mapUrl: 'https://www.google.com/maps/search/?api=1&query=Jalan%20Telawi%203%20Bangsar%20Kuala%20Lumpur',
 }
 

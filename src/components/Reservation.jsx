@@ -25,6 +25,7 @@ function Reservation() {
 
   const handleSubmit = async (event) => {
     event.preventDefault()
+    if (isSubmitting) return
 
     if (!form.customer_name.trim() || !form.phone.trim() || !form.reservation_date || !form.reservation_time) {
       setStatus({ type: 'error', message: 'Please add your name, phone, date, and time before reserving.' })

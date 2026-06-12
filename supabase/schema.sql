@@ -50,6 +50,7 @@ create table if not exists public.orders (
   email text,
   order_type text not null default 'pickup' check (order_type in ('pickup','delivery','dine-in')),
   status text not null default 'pending' check (status in ('pending','confirmed','preparing','ready','completed','cancelled')),
+  payment_status text not null default 'unpaid' check (payment_status in ('unpaid','paid','refunded')),
   subtotal numeric(10,2) not null default 0 check (subtotal >= 0),
   notes text,
   created_at timestamptz not null default now(),
@@ -96,6 +97,7 @@ create index if not exists reservations_date_idx on public.reservations(reservat
 create index if not exists reservations_status_idx on public.reservations(status);
 create index if not exists contact_messages_status_idx on public.contact_messages(status, created_at desc);
 create index if not exists orders_status_idx on public.orders(status, created_at desc);
+create index if not exists orders_payment_status_idx on public.orders(payment_status, created_at desc);
 create index if not exists order_items_order_id_idx on public.order_items(order_id);
 create index if not exists order_items_menu_item_id_idx on public.order_items(menu_item_id);
 

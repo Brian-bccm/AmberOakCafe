@@ -2,7 +2,18 @@ import { BarChart3, LogOut, MessageSquare, ReceiptText, Settings, Utensils, User
 import { useEffect, useMemo, useState } from 'react'
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 import { isSupabaseConfigured } from '../../lib/supabaseClient.js'
-import { fetchContactMessages, fetchOrders, fetchReservations, updateMessageStatus, updateOrderStatus, updateReservationStatus } from '../../services/adminService.js'
+import {
+  deleteContactMessage,
+  deleteOrder,
+  deleteReservation,
+  fetchContactMessages,
+  fetchOrders,
+  fetchReservations,
+  updateMessageStatus,
+  updateOrderPaymentStatus,
+  updateOrderStatus,
+  updateReservationStatus,
+} from '../../services/adminService.js'
 import { getSessionUser, isAdminUser, signInAdmin, signOutAdmin } from '../../services/authService.js'
 import { createMenuItem, deleteMenuItem, fetchAdminMenuItems, stringifyCustomizationOptions, updateMenuItem } from '../../services/menuService.js'
 import { buildReport, calculateAnalytics } from '../../services/reportService.js'
@@ -28,6 +39,38 @@ const emptyMenuForm = {
   customization_options: '',
   is_available: true,
   display_order: 0,
+}
+
+function matchesQuery(row, query, fields) {
+  const normalized = query.trim().toLowerCase()
+  if (!normalized) return true
+  return fields.some((field) => String(row[field] || '').toLowerCase().includes(normalized))
+}
+
+function AdminFilters({ query, onQueryChange, status, onStatusChange, statusOptions, placeholder, allLabel = 'All statuses' }) {
+  const labels = { true: 'Available', false: 'Unavailable' }
+
+  return (
+    <div className="flex flex-col gap-3 border-t border-stone-100 bg-white p-5 sm:flex-row">
+      <input value={query} onChange={(event) => onQueryChange(event.target.value)} className="focus-ring min-h-11 flex-1 rounded-lg border border-stone-300 bg-cafe-cream px-4 py-2 text-sm" placeholder={placeholder} />
+      <select value={status} onChange={(event) => onStatusChange(event.target.value)} className="focus-ring min-h-11 rounded-lg border border-stone-300 bg-cafe-cream px-4 py-2 text-sm">
+        <option value="all">{allLabel}</option>
+        {statusOptions.map((option) => (
+          <option key={option} value={option}>
+            {labels[option] || option}
+          </option>
+        ))}
+      </select>
+    </div>
+  )
+}
+
+function DangerButton({ children, onClick }) {
+  return (
+    <button type="button" onClick={onClick} className="font-bold text-red-700">
+      {children}
+    </button>
+  )
 }
 
 function AdminLogin({ onLogin }) {
@@ -84,6 +127,17 @@ function StatCard({ label, value }) {
 
 function Overview({ dataset }) {
   const analytics = useMemo(() => calculateAnalytics(dataset), [dataset])
+  const recentActivity = useMemo(
+    () =>
+      [
+        ...dataset.reservations.map((item) => ({ id: `reservation-${item.id}`, type: 'Reservation', title: item.customer_name, detail: `${item.guests} guests on ${formatDate(item.reservation_date)}`, created_at: item.created_at })),
+        ...dataset.messages.map((item) => ({ id: `message-${item.id}`, type: 'Message', title: item.name, detail: item.message, created_at: item.created_at })),
+        ...dataset.orders.map((item) => ({ id: `order-${item.id}`, type: 'Order', title: item.customer_name, detail: `${formatCurrency(item.subtotal)} - ${item.status}`, created_at: item.created_at })),
+      ]
+        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+        .slice(0, 6),
+    [dataset],
+  )
 
   return (
     <div className="grid gap-6">
@@ -102,8 +156,9 @@ function Overview({ dataset }) {
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="month" />
                 <YAxis />
-                <Tooltip formatter={(value) => formatCurrency(value)} />
+                <Tooltip formatter={(value, name) => (name === 'orders' ? value : formatCurrency(value))} />
                 <Bar dataKey="revenue" fill="#b7791f" radius={[8, 8, 0, 0]} />
+                <Bar dataKey="orders" fill="#51624f" radius={[8, 8, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -129,90 +184,163 @@ function Overview({ dataset }) {
         <StatCard label="Pending reservations" value={analytics.reservationsPending} />
         <StatCard label="New messages" value={analytics.messagesNew} />
       </div>
+      <div className="rounded-lg border border-stone-200 bg-white p-5 shadow-sm">
+        <h2 className="font-display text-2xl">Recent activity</h2>
+        <div className="mt-5 grid gap-3">
+          {recentActivity.length ? (
+            recentActivity.map((activity) => (
+              <div key={activity.id} className="grid gap-1 rounded-lg bg-cafe-cream px-4 py-3 sm:grid-cols-[120px_1fr_auto] sm:items-center">
+                <span className="text-xs font-bold uppercase tracking-[0.14em] text-cafe-copper">{activity.type}</span>
+                <span className="font-bold">{activity.title}</span>
+                <span className="text-sm text-stone-600">{activity.detail}</span>
+              </div>
+            ))
+          ) : (
+            <p className="text-sm text-stone-600">No recent activity yet.</p>
+          )}
+        </div>
+      </div>
     </div>
   )
 }
 
 function ReservationsPanel({ rows, refresh }) {
+  const [query, setQuery] = useState('')
+  const [status, setStatus] = useState('all')
+  const filteredRows = rows.filter((row) => matchesQuery(row, query, ['customer_name', 'phone', 'email', 'notes'])).filter((row) => status === 'all' || row.status === status)
+
   const update = async (id, status) => {
     await updateReservationStatus(id, status)
     refresh()
   }
 
+  const remove = async (id) => {
+    if (!window.confirm('Delete this reservation?')) return
+    await deleteReservation(id)
+    refresh()
+  }
+
   return (
-    <DataTable
-      title="Reservations management"
-      rows={rows}
-      headers={['Date', 'Customer', 'Phone', 'Guests', 'Status', 'Action']}
-      render={(row) => [
-        `${formatDate(row.reservation_date)} ${row.reservation_time}`,
-        row.customer_name,
-        row.phone,
-        row.guests,
-        row.status,
-        <StatusSelect key={row.id} value={row.status} options={['pending', 'confirmed', 'cancelled', 'completed']} onChange={(value) => update(row.id, value)} />,
-      ]}
-    />
+    <div className="grid gap-4">
+      <AdminFilters query={query} onQueryChange={setQuery} status={status} onStatusChange={setStatus} statusOptions={['pending', 'confirmed', 'cancelled', 'completed']} placeholder="Search by name, phone, email, or request" />
+      <DataTable
+        title="Reservations management"
+        rows={filteredRows}
+        headers={['Date', 'Customer', 'Phone', 'Guests', 'Request', 'Status', 'Action']}
+        render={(row) => [
+          `${formatDate(row.reservation_date)} ${row.reservation_time}`,
+          row.customer_name,
+          row.phone,
+          row.guests,
+          row.notes || '-',
+          row.status,
+          <span key={row.id} className="inline-flex flex-wrap gap-3">
+            <StatusSelect value={row.status} options={['pending', 'confirmed', 'cancelled', 'completed']} onChange={(value) => update(row.id, value)} />
+            <DangerButton onClick={() => remove(row.id)}>Delete</DangerButton>
+          </span>,
+        ]}
+      />
+    </div>
   )
 }
 
 function MessagesPanel({ rows, refresh }) {
+  const [query, setQuery] = useState('')
+  const [status, setStatus] = useState('all')
+  const filteredRows = rows.filter((row) => matchesQuery(row, query, ['name', 'phone', 'email', 'message'])).filter((row) => status === 'all' || row.status === status)
+
   const update = async (id, status) => {
     await updateMessageStatus(id, status)
     refresh()
   }
 
+  const remove = async (id) => {
+    if (!window.confirm('Delete this message?')) return
+    await deleteContactMessage(id)
+    refresh()
+  }
+
   return (
-    <DataTable
-      title="Contact messages management"
-      rows={rows}
-      headers={['Date', 'Name', 'Phone', 'Message', 'Status', 'Action']}
-      render={(row) => [
-        formatDateTime(row.created_at),
-        row.name,
-        row.phone,
-        row.message,
-        row.status,
-        <StatusSelect key={row.id} value={row.status} options={['new', 'read', 'replied', 'archived']} onChange={(value) => update(row.id, value)} />,
-      ]}
-    />
+    <div className="grid gap-4">
+      <AdminFilters query={query} onQueryChange={setQuery} status={status} onStatusChange={setStatus} statusOptions={['new', 'read', 'replied', 'archived']} placeholder="Search by name, phone, email, or message" />
+      <DataTable
+        title="Contact messages management"
+        rows={filteredRows}
+        headers={['Date', 'Name', 'Phone / Email', 'Message', 'Status', 'Action']}
+        render={(row) => [
+          formatDateTime(row.created_at),
+          row.name,
+          <span key={`${row.id}-contact`}>{row.phone}{row.email ? <><br />{row.email}</> : null}</span>,
+          row.message,
+          row.status,
+          <span key={row.id} className="inline-flex flex-wrap gap-3">
+            <StatusSelect value={row.status} options={['new', 'read', 'replied', 'archived']} onChange={(value) => update(row.id, value)} />
+            <DangerButton onClick={() => remove(row.id)}>Delete</DangerButton>
+          </span>,
+        ]}
+      />
+    </div>
   )
 }
 
 function OrdersPanel({ rows, refresh }) {
+  const [query, setQuery] = useState('')
+  const [status, setStatus] = useState('all')
+  const filteredRows = rows
+    .filter((row) => matchesQuery(row, query, ['customer_name', 'phone', 'email', 'notes']))
+    .filter((row) => status === 'all' || row.status === status)
+
   const update = async (id, status) => {
     await updateOrderStatus(id, status)
     refresh()
   }
 
+  const updatePayment = async (id, paymentStatus) => {
+    await updateOrderPaymentStatus(id, paymentStatus)
+    refresh()
+  }
+
+  const remove = async (id) => {
+    if (!window.confirm('Delete this order and its items?')) return
+    await deleteOrder(id)
+    refresh()
+  }
+
   return (
-    <DataTable
-      title="Orders management"
-      rows={rows}
-      headers={['Date', 'Customer', 'Items', 'Order Notes', 'Revenue', 'Status', 'Action']}
-      render={(row) => [
-        formatDateTime(row.created_at),
-        row.customer_name,
-        <div key={`${row.id}-items`} className="grid gap-3">
-          {(row.order_items || []).map((item) => (
-            <div key={item.id} className="rounded-lg bg-cafe-cream px-3 py-2">
-              <p className="font-bold">{item.quantity}x {item.item_name}</p>
-              {item.customizations && Object.keys(item.customizations).length ? (
-                <p className="mt-1 text-xs text-stone-600">
-                  {Object.entries(item.customizations).map(([name, value]) => `${name}: ${value}`).join(', ')}
-                </p>
-              ) : null}
-              {item.notes ? <p className="mt-1 text-xs text-stone-600">Note: {item.notes}</p> : null}
-            </div>
-          ))}
-          {row.order_items?.length ? null : '-'}
-        </div>,
-        row.notes || '-',
-        formatCurrency(row.subtotal),
-        row.status,
-        <StatusSelect key={row.id} value={row.status} options={['pending', 'confirmed', 'preparing', 'ready', 'completed', 'cancelled']} onChange={(value) => update(row.id, value)} />,
-      ]}
-    />
+    <div className="grid gap-4">
+      <AdminFilters query={query} onQueryChange={setQuery} status={status} onStatusChange={setStatus} statusOptions={['pending', 'confirmed', 'preparing', 'ready', 'completed', 'cancelled']} placeholder="Search by customer, phone, email, or notes" />
+      <DataTable
+        title="Orders management"
+        rows={filteredRows}
+        headers={['Date', 'Customer', 'Items', 'Order Notes', 'Revenue', 'Payment', 'Status', 'Action']}
+        render={(row) => [
+          formatDateTime(row.created_at),
+          <span key={`${row.id}-customer`}>{row.customer_name}<br /><span className="text-xs text-stone-500">{row.phone}</span></span>,
+          <div key={`${row.id}-items`} className="grid gap-3">
+            {(row.order_items || []).map((item) => (
+              <div key={item.id} className="rounded-lg bg-cafe-cream px-3 py-2">
+                <p className="font-bold">{item.quantity}x {item.item_name}</p>
+                {item.customizations && Object.keys(item.customizations).length ? (
+                  <p className="mt-1 text-xs text-stone-600">
+                    {Object.entries(item.customizations).map(([name, value]) => `${name}: ${value}`).join(', ')}
+                  </p>
+                ) : null}
+                {item.notes ? <p className="mt-1 text-xs text-stone-600">Note: {item.notes}</p> : null}
+              </div>
+            ))}
+            {row.order_items?.length ? null : '-'}
+          </div>,
+          row.notes || '-',
+          formatCurrency(row.subtotal),
+          <StatusSelect key={`${row.id}-payment`} value={row.payment_status || 'unpaid'} options={['unpaid', 'paid', 'refunded']} onChange={(value) => updatePayment(row.id, value)} />,
+          row.status,
+          <span key={row.id} className="inline-flex flex-wrap gap-3">
+            <StatusSelect value={row.status} options={['pending', 'confirmed', 'preparing', 'ready', 'completed', 'cancelled']} onChange={(value) => update(row.id, value)} />
+            <DangerButton onClick={() => remove(row.id)}>Delete</DangerButton>
+          </span>,
+        ]}
+      />
+    </div>
   )
 }
 
@@ -269,6 +397,11 @@ function MenuCrudPanel() {
   const [form, setForm] = useState(emptyMenuForm)
   const [editingId, setEditingId] = useState(null)
   const [status, setStatus] = useState('')
+  const [query, setQuery] = useState('')
+  const [availability, setAvailability] = useState('all')
+  const filteredItems = items
+    .filter((item) => matchesQuery(item, query, ['name', 'description', 'category', 'tag']))
+    .filter((item) => availability === 'all' || String(item.is_available) === availability)
 
   const load = async () => setItems(await fetchAdminMenuItems())
 
@@ -285,6 +418,11 @@ function MenuCrudPanel() {
 
   const submit = async (event) => {
     event.preventDefault()
+    if (!form.name.trim() || !form.description.trim() || Number(form.price) < 0 || form.price === '') {
+      setStatus('Please add product name, description, and a valid price.')
+      return
+    }
+
     try {
       if (editingId) {
         await updateMenuItem(editingId, form)
@@ -306,6 +444,7 @@ function MenuCrudPanel() {
   }
 
   const remove = async (id) => {
+    if (!window.confirm('Delete this menu item?')) return
     await deleteMenuItem(id)
     await load()
   }
@@ -337,22 +476,25 @@ function MenuCrudPanel() {
         {status ? <p className="mt-4 rounded-lg bg-cafe-cream px-4 py-3 text-sm">{status}</p> : null}
       </form>
 
-      <DataTable
-        title="Menu items"
-        rows={items}
-        headers={['Name', 'Category', 'Price', 'Options', 'Available', 'Actions']}
-        render={(item) => [
-          item.name,
-          item.category,
-          formatCurrency(item.price),
-          stringifyCustomizationOptions(item.customization_options) || '-',
-          item.is_available ? 'Yes' : 'No',
-          <span key={item.id} className="inline-flex gap-2">
-            <button onClick={() => edit(item)} className="font-bold text-cafe-copper">Edit</button>
-            <button onClick={() => remove(item.id)} className="font-bold text-red-700">Delete</button>
-          </span>,
-        ]}
-      />
+      <div className="grid gap-4">
+        <AdminFilters query={query} onQueryChange={setQuery} status={availability} onStatusChange={setAvailability} statusOptions={['true', 'false']} placeholder="Search by product, description, category, or tag" allLabel="All availability" />
+        <DataTable
+          title="Menu items"
+          rows={filteredItems}
+          headers={['Name', 'Category', 'Price', 'Options', 'Available', 'Actions']}
+          render={(item) => [
+            item.name,
+            item.category,
+            formatCurrency(item.price),
+            stringifyCustomizationOptions(item.customization_options) || '-',
+            item.is_available ? 'Yes' : 'No',
+            <span key={item.id} className="inline-flex gap-2">
+              <button type="button" onClick={() => edit(item)} className="font-bold text-cafe-copper">Edit</button>
+              <DangerButton onClick={() => remove(item.id)}>Delete</DangerButton>
+            </span>,
+          ]}
+        />
+      </div>
     </div>
   )
 }
@@ -479,6 +621,16 @@ function AdminApp() {
   const [user, setUser] = useState(null)
   const [checking, setChecking] = useState(true)
 
+  const handleLogin = (sessionUser) => {
+    window.history.replaceState(null, '', '/admin')
+    setUser(sessionUser)
+  }
+
+  const handleLogout = () => {
+    window.history.replaceState(null, '', '/admin/login')
+    setUser(null)
+  }
+
   useEffect(() => {
     if (!isSupabaseConfigured) {
       queueMicrotask(() => setChecking(false))
@@ -491,9 +643,14 @@ function AdminApp() {
   }, [])
 
   if (checking) return <main className="min-h-screen bg-cafe-cream p-8">Checking admin session...</main>
-  if (!user) return <AdminLogin onLogin={setUser} />
+  if (!user) {
+    if (window.location.pathname !== '/admin/login') {
+      window.history.replaceState(null, '', '/admin/login')
+    }
+    return <AdminLogin onLogin={handleLogin} />
+  }
 
-  return <AdminDashboard user={user} onLogout={() => setUser(null)} />
+  return <AdminDashboard user={user} onLogout={handleLogout} />
 }
 
 export default AdminApp

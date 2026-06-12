@@ -1,49 +1,59 @@
 # Amber & Oak Cafe
 
-Full-stack restaurant website portfolio project for a cafe, kopitiam, restaurant, or small food business.
+Business-ready restaurant website and lightweight management system for a small cafe, kopitiam, or restaurant.
 
-## Stack
+Live site: https://amber-oak-cafe-brian-bccm.netlify.app
+
+Admin: https://amber-oak-cafe-brian-bccm.netlify.app/admin
+
+## Project Overview
+
+Amber & Oak Cafe is a React + Supabase + Netlify project built as a realistic freelance deliverable. It includes a public marketing website, real enquiry/reservation/order persistence, staff login, admin management screens, reporting, and export tools.
+
+## Tech Stack
 
 - React + Vite
 - Tailwind CSS
-- Supabase Database + Auth
-- Netlify deployment
-- PDF and Excel-compatible CSV report export
+- Supabase Database, Auth, REST API, and Row Level Security
+- Netlify hosting and SPA redirects
+- Recharts for dashboard charts
+- jsPDF and CSV export for reports
 
-## Features
+## Main Features
 
-- Public landing page with hero, about, menu, gallery, promotion, reservation, location, contact, and WhatsApp CTAs.
-- Supabase-backed contact messages, reservation requests, order requests, and menu data.
-- Public menu uses Supabase when configured and falls back to demo content when env vars are missing.
-- Admin login using Supabase Auth email/password.
-- Admin dashboard with overview, reservations, contact messages, menu CRUD, orders, reports, analytics, PDF export, and Excel-compatible CSV export.
-- Analytics include total revenue, monthly revenue, total orders, total customers, reservation stats, monthly sales chart, and top-selling menu items.
+- Public homepage with hero, about, menu, order enquiry, gallery, promotion, reservation, location, contact, and footer.
+- Mobile responsive layout with sticky navigation and clear CTA buttons.
+- WhatsApp links use `wa.me` with pre-filled customer messages.
+- Contact form saves to `contact_messages`.
+- Reservation form saves to `reservations`.
+- Order form saves to `orders` and `order_items`, including item notes and customizations.
+- Menu loads from Supabase and falls back to clearly demo seed content when Supabase is not configured.
+- Admin login uses Supabase Auth and `app_metadata.role = "admin"`.
+- Admin dashboard includes overview metrics, recent activity, reservations, messages, menu CRUD, orders, reports, PDF export, and CSV export.
 
-## Local Development
+## Environment Variables
 
-```bash
-npm install
-cp .env.example .env.local
-npm run dev
-```
-
-Set these values in `.env.local` after creating a Supabase project:
+Create `.env.local` for local development:
 
 ```bash
 VITE_SUPABASE_URL=https://your-project-ref.supabase.co
 VITE_SUPABASE_PUBLISHABLE_KEY=sb_publishable_your_key_here
+VITE_RESTAURANT_WHATSAPP_NUMBER=60123456789
+VITE_RESTAURANT_PHONE_DISPLAY=+60 12-345 6789
+VITE_RESTAURANT_EMAIL=hello@amberandoak.example
+VITE_RESTAURANT_ADDRESS=28, Jalan Telawi, Bangsar, 59100 Kuala Lumpur
 ```
 
-Do not put a Supabase service-role or secret key in this frontend project.
+Never expose a Supabase service-role key in this frontend project.
 
 ## Supabase Setup
 
 1. Create a Supabase project.
-2. Open Supabase SQL Editor.
+2. Open SQL Editor.
 3. Run `supabase/schema.sql`.
-4. Run `supabase/seed.sql` for portfolio demo data.
-5. Create an admin user in Supabase Auth.
-6. In the user editor, set app metadata:
+4. Optionally run `supabase/seed.sql` for demo data.
+5. Create an Auth user for the restaurant owner or staff.
+6. Set the user app metadata:
 
 ```json
 {
@@ -51,71 +61,111 @@ Do not put a Supabase service-role or secret key in this frontend project.
 }
 ```
 
-7. In Supabase Auth URL settings, add:
-   - `http://localhost:5173`
-   - `http://localhost:5173/admin`
-   - Your Netlify production URL
-   - Your Netlify production URL with `/admin`
-
-The database uses Row Level Security. Public users can insert contact, reservation, and order records. Admin users can read and manage records only when their Supabase Auth `app_metadata.role` is `admin`.
-
-## Admin Dashboard
-
-Local URL:
+7. Add these Auth redirect URLs:
 
 ```text
+http://localhost:5173
 http://localhost:5173/admin
-```
-
-Production URL:
-
-```text
+http://localhost:5173/admin/login
+https://your-netlify-site.netlify.app
 https://your-netlify-site.netlify.app/admin
+https://your-netlify-site.netlify.app/admin/login
 ```
 
-Admin pages:
+## SQL Schema
 
-- Overview
-- Reservations
-- Contact messages
-- Menu CRUD
-- Orders
-- Daily, weekly, monthly, and yearly reports
+Core tables:
 
-## Backend Testing
+- `menu_items`: public menu catalog and admin-managed product data.
+- `reservations`: customer reservation requests.
+- `contact_messages`: customer enquiries.
+- `orders`: order header, subtotal, order status, payment status, and notes.
+- `order_items`: order lines, quantity, item price, customizations, and item notes.
 
-1. Start the app with configured Supabase env vars.
-2. Submit the public contact form.
-3. Confirm a new row appears in `contact_messages`.
-4. Submit the reservation form.
-5. Confirm a new row appears in `reservations`.
-6. Submit an order request.
-7. Confirm rows appear in `orders` and `order_items`.
-8. Log in to `/admin`.
-9. Update reservation/order/message statuses.
-10. Add, edit, and delete a menu item.
-11. Open Reports and export PDF/Excel-compatible CSV files.
+Security:
 
-## Netlify Deployment
+- Row Level Security is enabled on all public tables.
+- Public users can only view available menu items.
+- Public users can insert reservations, contact messages, orders, and order items.
+- Public users cannot read private reservations, messages, or orders.
+- Admin access is controlled by Supabase Auth app metadata: `role = admin`.
 
-Netlify build settings are configured in `netlify.toml`.
-
-- Build command: `npm run build`
-- Publish directory: `dist`
-
-Add these Netlify environment variables:
+## Local Testing
 
 ```bash
-VITE_SUPABASE_URL
-VITE_SUPABASE_PUBLISHABLE_KEY
+npm install
+npm run dev
 ```
 
-After deployment, add the Netlify URL to Supabase Auth redirect URLs.
+Open:
 
-## Checks
+```text
+http://localhost:5173
+http://localhost:5173/admin
+http://localhost:5173/admin/login
+```
+
+Recommended checks:
+
+1. Submit contact form and confirm a row appears in `contact_messages`.
+2. Submit reservation form and confirm a row appears in `reservations`.
+3. Submit order form and confirm rows appear in `orders` and `order_items`.
+4. Confirm WhatsApp buttons open `wa.me` links with pre-filled messages.
+5. Log in as admin.
+6. Search/filter reservations, update status, and delete a test reservation.
+7. Search/filter messages, mark read/replied, and delete a test message.
+8. Add, edit, hide, and delete a test menu item.
+9. Confirm the public menu updates after admin menu changes.
+10. Update order status and payment status.
+11. Export daily, weekly, monthly, and yearly reports.
+
+## Deployment
+
+Netlify settings are stored in `netlify.toml`:
+
+```toml
+[build]
+  command = "npm run build"
+  publish = "dist"
+```
+
+The SPA redirect is configured so `/admin` and `/admin/login` work after refresh:
+
+```toml
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+```
+
+Add the same environment variables in Netlify Site Settings > Environment Variables.
+
+Production verification:
 
 ```bash
 npm test
 npm run lint
 npm run build
 ```
+
+## Business-Ready Checklist
+
+- Public website sections: complete.
+- Mobile responsive layout: complete.
+- WhatsApp CTAs: complete and env-configurable.
+- Supabase persistence: complete.
+- Admin authentication: complete.
+- Reservation management: complete.
+- Contact message management: complete.
+- Menu CRUD: complete.
+- Order and payment status management: complete.
+- Sales reports and exports: complete.
+- RLS and public/private data separation: complete.
+- Netlify production deployment: complete.
+
+## Remaining Production Notes
+
+- Replace placeholder restaurant name, address, email, phone number, photos, menu, and pricing for each real client.
+- Add a real payment gateway if the business wants online payment collection.
+- Add email/SMS notifications if the restaurant needs staff alerts.
+- For high traffic or abuse-prone sites, add CAPTCHA or server-side rate limiting.

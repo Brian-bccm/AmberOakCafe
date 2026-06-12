@@ -43,11 +43,13 @@ export function calculateAnalytics({ reservations = [], messages = [], orders = 
   ].filter(Boolean)).size
 
   const monthlyRevenueMap = new Map()
+  const monthlyOrdersMap = new Map()
   const topItemsMap = new Map()
 
   for (const order of completedOrders) {
     const key = new Intl.DateTimeFormat('en-MY', { month: 'short', year: '2-digit' }).format(new Date(order.created_at))
     monthlyRevenueMap.set(key, (monthlyRevenueMap.get(key) || 0) + normalizePrice(order.subtotal))
+    monthlyOrdersMap.set(key, (monthlyOrdersMap.get(key) || 0) + 1)
 
     for (const item of order.order_items || []) {
       const current = topItemsMap.get(item.item_name) || { name: item.item_name, quantity: 0, revenue: 0 }
@@ -57,7 +59,7 @@ export function calculateAnalytics({ reservations = [], messages = [], orders = 
     }
   }
 
-  const monthlyRevenueChart = Array.from(monthlyRevenueMap, ([month, revenue]) => ({ month, revenue }))
+  const monthlyRevenueChart = Array.from(monthlyRevenueMap, ([month, revenue]) => ({ month, revenue, orders: monthlyOrdersMap.get(month) || 0 }))
   const topSellingItems = Array.from(topItemsMap.values())
     .sort((a, b) => b.quantity - a.quantity)
     .slice(0, 5)

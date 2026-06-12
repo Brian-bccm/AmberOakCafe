@@ -59,6 +59,7 @@ function Order() {
 
   const handleSubmit = async (event) => {
     event.preventDefault()
+    if (isSubmitting) return
     const selected = items.filter((item) => Number(item.quantity) > 0)
 
     if (!customer.name.trim() || !customer.phone.trim() || selected.length === 0) {

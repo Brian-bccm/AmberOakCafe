@@ -22,6 +22,7 @@ function Contact() {
 
   const handleSubmit = async (event) => {
     event.preventDefault()
+    if (isSubmitting) return
 
     if (!form.name.trim() || !form.phone.trim() || !form.message.trim()) {
       setStatus({

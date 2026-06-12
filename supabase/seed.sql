@@ -15,8 +15,8 @@ values
 on conflict do nothing;
 
 with created_order as (
-  insert into public.orders (customer_name, phone, email, order_type, status, subtotal, notes, created_at)
-  values ('Mei Wong', '016-222 7788', 'mei@example.com', 'pickup', 'completed', 62, 'Pickup at 1pm.', now() - interval '5 days')
+  insert into public.orders (customer_name, phone, email, order_type, status, payment_status, subtotal, notes, created_at)
+  values ('Mei Wong', '016-222 7788', 'mei@example.com', 'pickup', 'completed', 'paid', 62, 'Pickup at 1pm.', now() - interval '5 days')
   returning id
 )
 insert into public.order_items (order_id, item_name, unit_price, quantity, customizations, notes)
@@ -25,8 +25,8 @@ union all
 select id, 'Truffle Mushroom Toast', 28, 1, '{"Add peanut":"No"}'::jsonb, null from created_order;
 
 with created_order as (
-  insert into public.orders (customer_name, phone, email, order_type, status, subtotal, notes, created_at)
-  values ('Farid Omar', '019-555 1200', 'farid@example.com', 'pickup', 'completed', 48, 'No cutlery needed.', now() - interval '12 days')
+  insert into public.orders (customer_name, phone, email, order_type, status, payment_status, subtotal, notes, created_at)
+  values ('Farid Omar', '019-555 1200', 'farid@example.com', 'pickup', 'completed', 'paid', 48, 'No cutlery needed.', now() - interval '12 days')
   returning id
 )
 insert into public.order_items (order_id, item_name, unit_price, quantity, customizations, notes)
