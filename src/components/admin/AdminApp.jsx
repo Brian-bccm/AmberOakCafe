@@ -1319,7 +1319,6 @@ function ReportsPanel({ dataset }) {
 function AdminDashboard({ user, onLogout }) {
   const [activeTab, setActiveTab] = useState('overview')
   const [dataset, setDataset] = useState({ reservations: [], messages: [], orders: [], payments: [], reviews: [], auditLogs: [], business: defaultBusinessSettings })
-  const [warnings, setWarnings] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const allowedTabs = tabs.filter((tab) => canAccessModule(user, tab.id))
@@ -1338,7 +1337,6 @@ function AdminDashboard({ user, onLogout }) {
         optionalDataset('Business settings table', fetchBusinessSettings, defaultBusinessSettings),
       ])
       setDataset({ reservations, messages, orders, payments, reviews: reviewsResult.data, auditLogs: auditResult.data, business: businessResult.data })
-      setWarnings([reviewsResult.warning, auditResult.warning, businessResult.warning].filter(Boolean))
     } catch (fetchError) {
       setError(fetchError.message)
     } finally {
@@ -1408,15 +1406,6 @@ function AdminDashboard({ user, onLogout }) {
         <div className="p-5 lg:p-8">
           {loading ? <p className="rounded-lg bg-white p-5 shadow-sm">Loading dashboard data...</p> : null}
           {error ? <p className="rounded-lg bg-red-50 p-5 text-red-800">{error}</p> : null}
-          {!loading && !error && warnings.length ? (
-            <div className="mb-5 rounded-lg border border-amber-200 bg-amber-50 p-5 text-sm text-amber-900">
-              <p className="font-bold">Some new business-ready modules need the latest Supabase SQL migration.</p>
-              <ul className="mt-2 list-disc space-y-1 pl-5">
-                {warnings.map((warning) => <li key={warning}>{warning}</li>)}
-              </ul>
-              <p className="mt-3">Core reservations, messages, menu, orders, payments, and reports still load when their existing tables are available.</p>
-            </div>
-          ) : null}
           {!loading && !error && activeTab === 'overview' ? <Overview dataset={dataset} /> : null}
           {!loading && !error && activeTab === 'business' ? <BusinessSettingsPanel /> : null}
           {!loading && !error && activeTab === 'reservations' ? <ReservationsPanel rows={dataset.reservations} refresh={refresh} /> : null}
